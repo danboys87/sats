@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Bitget Bot — Trading Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #f5f4f0;
+  --surface:  #ffffff;
+  --border:   #e2e0d8;
+  --border2:  #ccc9bc;
+  --text:     #1a1916;
+  --muted:    #7a7568;
+  --accent:   #1a1916;
+  --green:    #1a7a4a;
+  --green-bg: #edf7f1;
+  --red:      #c0392b;
+  --red-bg:   #fdf0ee;
+  --yellow:   #b07d20;
+  --yellow-bg:#fdf6e3;
+  --blue:     #1a4a7a;
+  --blue-bg:  #edf2f7;
+  --mono:     'DM Mono', monospace;
+  --sans:     'DM Sans', sans-serif;
+  --radius:   6px;
+  --shadow:   0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; min-height: 100vh; }
+.app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+.topbar { display: flex; align-items: center; gap: 12px; padding: 0 20px; height: 48px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: nowrap; }
+.topbar-logo { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: .04em; color: var(--text); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.topbar-logo span { opacity: .4; }
+.topbar-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+.topbar-status { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+.dot.live { background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.mode-badge { font-family: var(--mono); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 3px; white-space: nowrap; }
+.mode-badge.auto { background: var(--green-bg); color: var(--green); }
+.mode-badge.manual { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.api-input { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 8px; background: var(--bg); color: var(--text); width: 200px; outline: none; }
+.api-input:focus { border-color: var(--accent); }
+.btn { font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; transition: all .15s; white-space: nowrap; }
+.btn:hover { background: var(--bg); border-color: var(--border2); }
+.btn:active { transform: scale(.98); }
+.btn.primary { background: var(--text); color: #fff; border-color: var(--text); }
+.btn.primary:hover { opacity: .85; background: var(--text); }
+.btn.success { background: var(--green); color: #fff; border-color: var(--green); }
+.btn.danger  { background: var(--red);   color: #fff; border-color: var(--red); }
+.btn.sm { padding: 3px 8px; font-size: 11px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.body { display: flex; flex: 1; overflow: hidden; }
+.sidenav { width: 180px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; padding: 12px 0; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 16px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--muted); border-left: 2px solid transparent; transition: all .12s; user-select: none; }
+.nav-item:hover { color: var(--text); background: var(--bg); }
+.nav-item.active { color: var(--text); border-left-color: var(--text); background: var(--bg); }
+.nav-icon { font-size: 14px; width: 18px; text-align: center; }
+.nav-section { padding: 16px 16px 4px; font-size: 10px; font-weight: 600; letter-spacing: .08em; color: var(--border2); text-transform: uppercase; }
+.content { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.panel-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.panel-actions { display: flex; gap: 6px; align-items: center; }
+.stats-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+.stat-label { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.stat-value { font-family: var(--mono); font-size: 22px; font-weight: 500; line-height: 1; color: var(--text); }
+.stat-value.green { color: var(--green); }
+.stat-value.red   { color: var(--red); }
+.stat-sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { text-align: left; padding: 8px 14px; font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--bg); white-space: nowrap; }
+.tbl td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-family: var(--mono); font-size: 12px; vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--bg); }
+.badge { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+.badge.green  { background: var(--green-bg);  color: var(--green); }
+.badge.red    { background: var(--red-bg);    color: var(--red); }
+.badge.yellow { background: var(--yellow-bg); color: var(--yellow); }
+.badge.blue   { background: var(--blue-bg);   color: var(--blue); }
+.badge.gray   { background: var(--bg);        color: var(--muted); border: 1px solid var(--border); }
+.action-group { display: flex; gap: 4px; flex-wrap: wrap; }
+.log-box { font-family: var(--mono); font-size: 11px; line-height: 1.6; background: #1a1916; color: #c8c4b8; padding: 14px; border-radius: var(--radius); overflow-y: auto; height: 340px; white-space: pre-wrap; word-break: break-all; }
+.log-box .log-err  { color: #e87474; }
+.log-box .log-warn { color: #e8c274; }
+.log-box .log-ok   { color: #74e89a; }
+.log-box .log-ai   { color: #74b4e8; }
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.field input, .field select { font-family: var(--mono); font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius); padding: 7px 10px; background: var(--bg); color: var(--text); outline: none; transition: border-color .15s; }
+.field input:focus, .field select:focus { border-color: var(--accent); }
+.cfg-section { grid-column: 1/-1; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-top: 8px; border-top: 1px solid var(--border); }
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 16px; background: var(--surface); }
+.tab { padding: 10px 14px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .12s; user-select: none; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--text); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.empty { padding: 40px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.toast-area { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
+.toast { background: var(--text); color: #fff; padding: 10px 16px; border-radius: var(--radius); font-size: 12px; font-family: var(--mono); box-shadow: 0 4px 16px rgba(0,0,0,.2); animation: slideIn .2s ease; max-width: 320px; }
+.toast.ok  { background: var(--green); }
+.toast.err { background: var(--red); }
+@keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(3, 1fr); } }
+.page { display: none; }
+.page.active { display: flex; flex-direction: column; gap: 16px; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 100; align-items: center; justify-content: center; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--surface); border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 8px 40px rgba(0,0,0,.15); padding: 24px; min-width: 420px; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; }
+.modal-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+.modal-close { float: right; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; }
+
+/* ── AI Ranking ── */
+.sbar { width: 70px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.sbar i { display: block; height: 100%; background: var(--text); }
+.sbar.green i { background: var(--green); }
+.sbar.yellow i { background: var(--yellow); }
+.sbar.red i { background: var(--red); }
+.rank-no { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.macro-box { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: flex-start; font-size: 12px; line-height: 1.6; }
+.reason-cell { font-family: var(--sans) !important; font-size: 12px !important; max-width: 340px; line-height: 1.5; }
+.ai-chip { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+
+/* ═══════════════ RESPONSIVE / MOBILE ═══════════════ */
+.hamburger, .api-toggle { display: none; }
+.topbar-chips { display: contents; }
+.api-box { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.topbar-right { margin-left: 0; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-2.gap20 { gap: 20px; }
+.stats-3 { grid-template-columns: repeat(3, 1fr); }
+.only-m { display: none; }
+.nav-backdrop { display: none; }
+.tbl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 900px) {
+  .hamburger { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; font-size: 18px; line-height: 1; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); cursor: pointer; flex-shrink: 0; }
+  .api-toggle { display: inline-block; }
+
+  /* Topbar: 2-3 baris */
+  .topbar { height: auto; min-height: 48px; flex-wrap: wrap; gap: 8px 10px; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; }
+  .topbar-sep, .logo-sub, #lastUpdate { display: none; }
+  .conn-wrap { margin-left: auto; }
+  .topbar-chips { display: flex; order: 5; width: 100%; gap: 16px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .topbar-chips::-webkit-scrollbar { display: none; }
+  .topbar-chips .topbar-status { flex-shrink: 0; }
+  .api-box { display: none; order: 6; width: 100%; margin-left: 0; }
+  .topbar.api-open .api-box { display: flex; }
+  .api-box .api-input { flex: 1; width: auto; min-width: 0; }
+
+  /* Sidebar -> drawer */
+  .sidenav { position: fixed; top: 0; left: 0; bottom: 0; z-index: 200; width: 250px; overflow-y: auto; transform: translateX(-100%); transition: transform .2s ease; padding-top: calc(12px + env(safe-area-inset-top)); }
+  .sidenav.open { transform: none; box-shadow: 4px 0 24px rgba(0,0,0,.2); }
+  .nav-backdrop.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 150; }
+  .nav-item { padding: 13px 18px; font-size: 13px; }
+
+  /* Konten */
+  .content { padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); gap: 12px; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat-card { padding: 12px; }
+  .stat-value { font-size: 17px; word-break: break-word; }
+  .stat-sub { font-size: 10px; }
+  .stats-3 { grid-template-columns: repeat(2, 1fr); }
+  .stats-3 .stat-card:first-child { grid-column: 1 / -1; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .config-grid { grid-template-columns: 1fr; padding: 12px; }
+  .panel-header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  .panel-actions { flex-wrap: wrap; }
+  .macro-box { flex-wrap: wrap; }
+  .tbl th, .tbl td { padding: 8px 10px; }
+  .empty { padding: 28px 14px; }
+
+  /* Tombol & input (target sentuh, cegah zoom iOS) */
+  .btn { padding: 8px 14px; min-height: 36px; }
+  .btn.sm { padding: 7px 10px; min-height: 32px; }
+  .field input, .field select, .api-input, #whitelist-editor { font-size: 16px !important; }
+  .pc-actions .btn { flex: 1 1 calc(50% - 6px); }
+
+  .modal { min-width: 0; width: 92vw; padding: 16px; }
+  .log-box { height: 60vh; }
+  .toast-area { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .toast { max-width: none; }
+}
+
+/* Tabel -> kartu di layar kecil */
+@media (max-width: 700px) {
+  .tbl.cards thead { display: none; }
+  .tbl.cards, .tbl.cards tbody, .tbl.cards tr { display: block; width: 100%; }
+  .tbl.cards tr { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .tbl.cards tr:last-child { border-bottom: none; }
+  .tbl.cards tr:hover td { background: transparent; }
+  .tbl.cards td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 0; border: none; text-align: right; }
+  .tbl.cards td::before { content: attr(data-label); flex-shrink: 0; text-align: left; font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .tbl.cards td:not([data-label])::before { content: none; }
+  .tbl.cards td.c-title { display: block; text-align: left; font-size: 14px; padding-bottom: 6px; }
+  .tbl.cards td.c-actions { justify-content: flex-start; text-align: left; padding-top: 8px; }
+  .tbl.cards td.c-hide { display: none; }
+  .tbl.cards td.empty { display: block; text-align: center; padding: 28px 14px; }
+  .tbl.cards td.reason-cell { display: block; max-width: none; text-align: left; }
+  .tbl.cards td.reason-cell::before { display: block; margin-bottom: 2px; }
+  .tbl.cards .only-m { display: inline; }
+}
+
+@media (max-width: 900px) {
+  #pending-cards { padding: 10px !important; }
+  #pending-cards .badge { white-space: normal; max-width: 100%; line-height: 1.4; }
+}
+@media (max-width: 360px) {
+  #connLabel { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="nav-backdrop" id="navBackdrop" onclick="closeNav()"></div>
+<div class="app">
+
+<header class="topbar">
+  <button class="hamburger" onclick="toggleNav()" aria-label="Menu">☰</button>
+  <div class="topbar-logo"><span>▣</span> BITGET BOT <span class="logo-sub">/ TRADING DESK</span></div>
+  <div class="topbar-sep"></div>
+  <div class="topbar-status conn-wrap"><div class="dot" id="connDot"></div><span id="connLabel">Menghubungkan...</span></div>
+  <div class="topbar-chips">
+    <div class="topbar-sep"></div>
+    <div class="topbar-status"><span id="modeLabel">—</span></div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-status">AI: <span id="aiLabel">—</span></div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-status">Filter: <span id="aiFilterLabel">—</span></div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-status">Mode: <span class="mode-badge manual" id="entryModeBadge">Manual</span></div>
+  </div>
+  <div class="api-box">
+    <input class="api-input" id="apiUrl" placeholder="http://localhost:3000" value="http://localhost:3000">
+    <button class="btn primary" onclick="connect()">Connect</button>
+  </div>
+  <div class="topbar-right">
+    <button class="btn api-toggle" onclick="this.closest('.topbar').classList.toggle('api-open')" title="API URL">⚙</button>
+    <button class="btn" onclick="refreshAll()" title="Refresh data"><span id="refreshIcon">↻</span></button>
+    <span style="font-family:var(--mono);font-size:11px;color:var(--muted)" id="lastUpdate"></span>
+  </div>
+</header>
+
+<div class="body">
+<nav class="sidenav" id="sidenav">
+  <div class="nav-section">Monitor</div>
+  <div class="nav-item active" onclick="showPage('overview')"><span class="nav-icon">◈</span> Overview</div>
+  <div class="nav-item" onclick="showPage('positions')"><span class="nav-icon">◎</span> Positions</div>
+  <div class="nav-item" onclick="showPage('pending')"><span class="nav-icon">◷</span> Pending <span id="pendingBadge" style="margin-left:auto;display:none" class="badge yellow">0</span></div>
+  <div class="nav-section">Trading</div>
+  <div class="nav-item" onclick="showPage('trade')"><span class="nav-icon">⇅</span> Buy / Sell</div>
+  <div class="nav-item" onclick="showPage('screen')"><span class="nav-icon">⊙</span> Screening</div>
+  <div class="nav-item" onclick="showPage('ranking')"><span class="nav-icon">★</span> AI Ranking</div>
+  <div class="nav-item" onclick="showPage('analyze')"><span class="nav-icon">◐</span> AI Analyst</div>
+  <div class="nav-section">Laporan</div>
+  <div class="nav-item" onclick="showPage('history')"><span class="nav-icon">≡</span> Laporan PnL</div>
+  <div class="nav-item" onclick="showPage('logs')"><span class="nav-icon">⊟</span> Bot Logs</div>
+  <div class="nav-section">Settings</div>
+  <div class="nav-item" onclick="showPage('config')"><span class="nav-icon">⚙</span> Config</div>
+</nav>
+
+<main class="content" id="content">
+
+<!-- ═══════════════ PAGE: OVERVIEW ═════════════════════════════════════════ -->
+<div class="page active" id="page-overview">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">Total PnL</div><div class="stat-value" id="st-pnl">—</div><div class="stat-sub" id="st-pnl-sub"></div></div>
+    <div class="stat-card"><div class="stat-label">Open Positions</div><div class="stat-value" id="st-open">—</div><div class="stat-sub" id="st-open-sub"></div></div>
+    <div class="stat-card"><div class="stat-label">Pending Approval</div><div class="stat-value" id="st-pending">—</div><div class="stat-sub" id="st-pending-sub">awaiting action</div></div>
+    <div class="stat-card"><div class="stat-label">Closed Trades</div><div class="stat-value" id="st-closed">—</div><div class="stat-sub">all time</div></div>
+    <div class="stat-card"><div class="stat-label">Budget / Trade</div><div class="stat-value" id="st-budget">—</div><div class="stat-sub" id="st-budget-sub"></div></div>
+    <div class="stat-card"><div class="stat-label">SL / Trailing</div><div class="stat-value" id="st-tpsl">—</div><div class="stat-sub" id="st-trail">—</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">◎ Open Positions</div><div class="panel-actions"><button class="btn sm" onclick="showPage('positions')">View All →</button></div></div>
+    <table class="tbl cards" id="ov-positions-tbl">
+      <thead><tr><th>Symbol</th><th>Entry</th><th>Current</th><th>PnL %</th><th>PnL USDT</th><th>Status</th><th>Hold</th><th>Action</th></tr></thead>
+      <tbody id="ov-positions-body"><tr><td colspan="8" class="empty">Tidak ada posisi terbuka</td></tr></tbody>
+    </table>
+  </div>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">◷ Pending Approval</div>
+      <div class="panel-actions">
+        <span id="autoModeOverviewBadge" style="display:none" class="badge green">🤖 Auto Execute ON</span>
+        <button class="btn sm" onclick="showPage('pending')">View All →</button>
+      </div>
+    </div>
+    <table class="tbl cards">
+      <thead><tr><th>Symbol</th><th>Price</th><th>Vol 24h</th><th>AI</th><th>Sisa</th><th>Action</th></tr></thead>
+      <tbody id="ov-pending-body"><tr><td colspan="6" class="empty">Tidak ada kandidat pending</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: POSITIONS ════════════════════════════════════════ -->
+<div class="page" id="page-positions">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">◎ Open Positions — Detail</div><div class="panel-actions"><button class="btn sm" onclick="refreshAll()">↻ Refresh</button></div></div>
+    <table class="tbl cards">
+      <thead><tr><th>Symbol</th><th>Entry Price</th><th>Current</th><th>PnL %</th><th>PnL USDT</th><th>Qty</th><th>SL</th><th>Status</th><th>Opened</th><th>Action</th></tr></thead>
+      <tbody id="pos-body"><tr><td colspan="10" class="empty">Tidak ada posisi terbuka</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: PENDING ══════════════════════════════════════════ -->
+<div class="page" id="page-pending">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">◷ Pending Approval Queue</div>
+      <div class="panel-actions">
+        <span id="autoModePendingBadge" style="display:none" class="badge green">🤖 Auto Mode ON</span>
+        <button class="btn sm" onclick="showPage('ranking')">★ AI Ranking</button>
+        <button class="btn sm" onclick="refreshAll()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="pending-cards" style="padding:16px;display:flex;flex-direction:column;gap:12px"><div class="empty">Tidak ada kandidat pending</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: TRADE ════════════════════════════════════════════ -->
+<div class="page" id="page-trade">
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">▲ Manual Buy</div></div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div class="field"><label>Symbol</label><input id="buy-symbol" placeholder="BTCUSDT" style="text-transform:uppercase"></div>
+        <div style="background:var(--bg);border-radius:var(--radius);padding:12px;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8">
+          Budget: <span id="buy-budget" style="color:var(--text)">—</span> USDT<br>
+          Max positions: <span id="buy-maxpos" style="color:var(--text)">—</span><br>
+          Current open: <span id="buy-openpos" style="color:var(--text)">—</span>
+        </div>
+        <div id="buy-price-preview" style="font-family:var(--mono);font-size:12px;color:var(--muted)">Ketik symbol untuk preview harga</div>
+        <button class="btn success" style="width:100%" onclick="doBuy()">Buy Market</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">▼ Manual Sell</div></div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div class="field"><label>Select Position</label><select id="sell-symbol"><option value="">— Pilih posisi —</option></select></div>
+        <div id="sell-preview" style="background:var(--bg);border-radius:var(--radius);padding:12px;font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8">Pilih posisi untuk lihat detail</div>
+        <button class="btn danger" style="width:100%" onclick="doSell()">Sell Market</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: SCREENING ════════════════════════════════════════ -->
+<div class="page" id="page-screen">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">⊙ Self-Aware Trend System — 4H</div></div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+
+      <!-- Entry Mode Toggle Card -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:center;gap:16px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">Entry Mode</div>
+          <div style="font-size:11px;color:var(--muted)" id="screenModeDesc">Sinyal BUY masuk queue, tunggu /approve di Telegram atau klik tombol approve di dashboard.</div>
+        </div>
+        <span class="mode-badge manual" id="entryModeBadge2" style="font-size:12px">Manual</span>
+      </div>
+
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;align-items:center;gap:16px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px">AI Filter &amp; Ranking</div>
+          <div style="font-size:11px;color:var(--muted)" id="screenAIDesc">—</div>
+        </div>
+        <button class="btn sm" onclick="showPage('ranking')">Lihat Ranking →</button>
+      </div>
+
+      <div class="panel" style="padding:24px;text-align:center">
+        <div style="font-size:32px;margin-bottom:10px">📡</div>
+        <div style="font-weight:600;margin-bottom:6px;font-size:14px">Self-Aware Trend System — Timeframe 4H</div>
+        <div style="color:var(--muted);font-size:12px;margin-bottom:6px;line-height:1.6">
+          Band SuperTrend adaptif (berbasis kualitas tren / TQI) pada candle 4 jam.<br>
+          Sinyal <b style="color:var(--green)">BUY</b> (tren flip bullish) untuk entry,
+          sinyal <b style="color:var(--red)">SELL</b> (tren flip bearish) untuk exit posisi terbuka.
+        </div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:16px" id="satsParams">Preset: — | ATR: — | Interval: —</div>
+        <button class="btn primary" style="width:100%;max-width:320px" onclick="doScreen()">▶ Jalankan SATS 4H Scan</button>
+      </div>
+
+      <div class="panel" style="padding:14px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.06em">Management Cycle</div>
+        <button class="btn" onclick="doManage()">⚙ Run Management (SL/Trailing check)</button>
+        <span style="color:var(--muted);font-size:11px;margin-left:10px">Evaluasi semua posisi terbuka sekarang</span>
+      </div>
+
+      <div id="screen-log" style="display:none" class="log-box"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: AI RANKING ═══════════════════════════════════════ -->
+<div class="page" id="page-ranking">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">★ AI Ranking Kandidat</div>
+      <div class="panel-actions">
+        <span id="rank-meta" style="font-family:var(--mono);font-size:11px;color:var(--muted)"></span>
+        <button class="btn sm" onclick="loadRanking()">↻ Refresh</button>
+        <button class="btn primary sm" id="rankBtn" onclick="runRank()">🧠 Rank Pending Queue</button>
+      </div>
+    </div>
+    <div id="rank-macro" class="macro-box" style="display:none"></div>
+    <table class="tbl cards">
+      <thead><tr><th>#</th><th>Symbol</th><th>Keputusan</th><th>Skor</th><th>Sentimen</th><th>Token Unlock</th><th>Alasan</th><th>Aksi</th></tr></thead>
+      <tbody id="rank-body"><tr><td colspan="8" class="empty">Belum ada hasil ranking</td></tr></tbody>
+    </table>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.7">
+      ℹ️ Ranking berjalan otomatis setiap screening menemukan sinyal BUY (jika AI Filter aktif). Tombol <b>Rank Pending Queue</b> menjalankannya manual untuk kandidat yang masih di queue (mode manual approve). Hasil AI adalah filter awal, bukan jaminan: jadwal unlock &amp; berita tetap perlu dicek ulang. Tanda ⚠️ = riset tanpa web search (tidak terverifikasi).
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: AI ANALYST ═══════════════════════════════════════ -->
+<div class="page" id="page-analyze">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">◐ AI Analyst — On Demand</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="font-size:12px;color:var(--muted);line-height:1.7">
+        Analisa manual untuk symbol apapun. AI akan mengevaluasi sinyal SATS, trend alignment 3 timeframe, dan sentiment market terkini. Bila API key AI belum diisi, dipakai analisa berbasis aturan teknikal (tanpa berita/sentimen).
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input id="ai-symbol" class="api-input" style="width:180px;font-size:13px;padding:8px 12px" placeholder="BTCUSDT">
+        <button class="btn primary" onclick="doAnalyze()" id="analyzeBtn">Analyze</button>
+        <span style="color:var(--muted);font-size:12px;align-self:center">Estimasi 1–2 menit</span>
+      </div>
+    </div>
+  </div>
+  <div id="ai-result" style="display:none" class="panel">
+    <div class="panel-header"><div class="panel-title" id="ai-result-title">AI Report</div></div>
+    <div style="padding:16px" id="ai-result-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: HISTORY (Laporan PnL Harian) ════════════════════ -->
+<div class="page" id="page-history">
+  <div class="stats-row stats-3" id="pnl-summary"></div>
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">▦ PnL Harian</div>
+      <div class="panel-actions">
+        <select id="pnl-days" class="api-input" style="width:auto" onchange="loadHistory()">
+          <option value="7">7 hari</option>
+          <option value="30" selected>30 hari</option>
+          <option value="90">90 hari</option>
+          <option value="365">1 tahun</option>
+        </select>
+        <button class="btn" onclick="loadHistory()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="tbl-scroll">
+    <table class="tbl">
+      <thead><tr><th>Tanggal</th><th>Deal Ditutup</th><th>Win Rate</th><th>PnL (USDT)</th></tr></thead>
+      <tbody id="pnl-body"><tr><td colspan="4" class="empty">Memuat laporan...</td></tr></tbody>
+    </table>
+    </div>
+    <div id="pnl-note" style="padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
+      ℹ️ Klik baris tanggal untuk lihat detail deal. Deal yang ditutup lewat <b>Manual Sell</b> ikut tercatat tetapi PnL-nya tidak dihitung ke Total PnL / Win Rate. Fee = estimasi.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: LOGS ═════════════════════════════════════════════ -->
+<div class="page" id="page-logs">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-title">⊟ Bot Logs</div>
+      <div class="panel-actions">
+        <button class="btn sm" onclick="loadLogs()">↻ Refresh</button>
+        <button class="btn sm" onclick="toggleAutoLog()" id="autoLogBtn">Auto: ON</button>
+      </div>
+    </div>
+    <div style="padding:12px"><div class="log-box" id="log-box">Connecting...</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ PAGE: CONFIG ═══════════════════════════════════════════ -->
+<div class="page" id="page-config">
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">⚙ Configuration</div><div class="panel-actions"><button class="btn sm" onclick="loadConfig()">↻ Reload</button><button class="btn primary" onclick="saveConfig()">Save Config</button></div></div>
+    <div class="config-grid" id="config-grid"><div class="empty" style="grid-column:1/-1">Loading config...</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-header"><div class="panel-title">Whitelist Editor</div></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-size:12px;color:var(--muted)">Satu symbol per baris. Kosongkan untuk scan semua koin.</div>
+      <textarea id="whitelist-editor" style="font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:var(--radius);padding:10px;background:var(--bg);color:var(--text);width:100%;height:200px;outline:none;resize:vertical" placeholder="BTCUSDT&#10;ETHUSDT&#10;SOLUSDT"></textarea>
+      <div><button class="btn primary" onclick="saveWhitelist()">Save Whitelist</button></div>
+    </div>
+  </div>
+</div>
+
+</main>
+</div>
+</div>
+
+<div class="toast-area" id="toastArea"></div>
+
+<div class="modal-bg" id="aiModal">
+  <div class="modal">
+    <div class="modal-title"><span id="aiModalTitle">AI Report</span><span class="modal-close" onclick="closeModal('aiModal')">×</span></div>
+    <div id="aiModalBody"></div>
+  </div>
+</div>
+
+<script>
+// Bila dibuka lewat server bot (http://host:3000/), API otomatis = origin yang sama
+const _served = location.protocol.startsWith('http');
+let API = _served ? location.origin : (localStorage.getItem('api_url') || 'http://localhost:3000');
+let _data = null;
+let _autoRefresh = null;
+let _autoLog = true;
+let _logTimer = null;
+let _fullConfig = null;
+let _rankTimer = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('apiUrl').value = API;
+  connect();
+});
+
+function connect() {
+  API = document.getElementById('apiUrl').value.replace(/\/$/, '');
+  localStorage.setItem('api_url', API);
+  refreshAll();
+  if (_autoRefresh) clearInterval(_autoRefresh);
+  _autoRefresh = setInterval(refreshAll, 10000);
+}
+
+async function refreshAll() {
+  document.getElementById('refreshIcon').className = 'spin';
+  try {
+    const res = await apiFetch('/api/status');
+    if (res.ok) { _data = res; renderAll(res); setConn(true); }
+  } catch(e) { setConn(false); }
+  document.getElementById('refreshIcon').textContent = '↻';
+  document.getElementById('refreshIcon').className = '';
+  document.getElementById('lastUpdate').textContent = 'Updated ' + new Date().toLocaleTimeString('id-ID');
+}
+
+// Parse aman: respons kosong / bukan JSON (mis. diputus proxy) -> error yang jelas
+async function apiFetch(path, opts = {}) {
+  const secret = localStorage.getItem('api_secret') || '';
+  const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json', 'X-Secret': secret, ...opts.headers }, ...opts });
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error(`Respons server kosong/tidak valid (HTTP ${res.status})`); }
+}
+
+async function apiPost(path, body) {
+  return apiFetch(path, { method: 'POST', body: JSON.stringify(body) });
+}
+
+function renderAll(d) {
+  renderStats(d);
+  renderOvPositions(d.positions);
+  renderOvPending(d.pending);
+  renderPositionsPage(d.positions);
+  renderPendingPage(d.pending);
+  renderTradeForm(d);
+  const nb = d.pending?.length || 0;
+  const pb = document.getElementById('pendingBadge');
+  pb.style.display = nb > 0 ? '' : 'none';
+  pb.textContent = nb;
+}
+
+function setConn(ok) {
+  document.getElementById('connDot').className   = 'dot' + (ok ? ' live' : '');
+  document.getElementById('connLabel').textContent = ok ? 'Connected' : 'Disconnected';
+}
+
+// ── Render Stats + Auto Mode UI ───────────────────────────────────────────────
+function renderStats(d) {
+  const cfg  = d.config || {};
+  const pnl  = d.stats?.totalPnlUsdt ?? 0;
+  const el   = id => document.getElementById(id);
+  const isAuto = cfg.autoExecute ?? false;
+
+  el('st-pnl').textContent       = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' USDT';
+  el('st-pnl').className         = 'stat-value ' + (pnl >= 0 ? 'green' : 'red');
+  el('st-open').textContent      = (d.stats?.openPositions ?? '—') + '/' + (cfg.maxOpenPositions ?? '—');
+  el('st-open-sub').textContent  = 'slots used';
+  el('st-pending').textContent   = d.pending?.length ?? '—';
+  el('st-pending-sub').textContent = isAuto ? '🤖 auto mode' : 'awaiting action';
+  el('st-closed').textContent    = d.stats?.closedCount ?? '—';
+  el('st-budget').textContent    = cfg.budgetPerTrade ?? '—';
+  el('st-budget-sub').textContent= 'USDT per trade';
+  el('st-tpsl').textContent      = 'SATS / +' + (cfg.trailActivatePct ?? '—') + '%';
+  el('st-trail').textContent     = `Callback ${cfg.trailPct ?? '—'}% dari peak`;
+  el('modeLabel').textContent    = cfg.isDryRun ? '🧪 DRY RUN' : '💸 LIVE TRADING';
+  const aiSt = cfg.aiStatus;
+  el('aiLabel').textContent = aiSt?.enabled ? `🤖 ${aiSt.provider}` : '⚠ Set API Key';
+  el('aiFilterLabel').textContent = cfg.aiFilterEnabled ? (aiSt?.enabled ? '🧠 ON' : '⚠ ON (no key)') : 'OFF';
+
+  const aiDesc = document.getElementById('screenAIDesc');
+  if (aiDesc) aiDesc.textContent = !cfg.aiFilterEnabled
+    ? 'Nonaktif. Sinyal BUY langsung diproses tanpa filter AI (aktifkan di Config → AI Filter).'
+    : (aiSt?.enabled
+        ? 'Aktif. Tiap sinyal BUY dinilai AI (sentimen, token unlock, jadwal makro) lalu diurutkan; kandidat AVOID/WAIT dibuang di mode auto.'
+        : 'Aktif di config, tapi API key AI belum diset → filter dilewati.');
+
+  const satsParamsEl = document.getElementById('satsParams');
+  if (satsParamsEl) satsParamsEl.textContent = 'Preset: ' + (cfg.satsPreset ?? '—') + ' | ATR ' + (cfg.satsAtrLen ?? '—') + ' ×' + (cfg.satsBaseMult ?? '—') + ' | SL ' + (cfg.satsSlMult ?? '—') + '×ATR | Interval: tiap ' + (cfg.satsIntervalMin ?? '—') + ' menit';
+
+  updateAutoUI(isAuto);
+}
+
+// ── Entry Mode Badge UI ──────────────────────────────────────────────────────
+function updateAutoUI(isAuto) {
+  const b1 = document.getElementById('entryModeBadge');
+  if (b1) {
+    b1.textContent  = isAuto ? '🤖 Auto' : 'Manual';
+    b1.className    = 'mode-badge' + (isAuto ? ' auto' : ' manual');
+  }
+  const b2 = document.getElementById('entryModeBadge2');
+  if (b2) {
+    b2.textContent  = isAuto ? '🤖 Auto' : 'Manual';
+    b2.className    = 'mode-badge' + (isAuto ? ' auto' : ' manual');
+  }
+  const desc = document.getElementById('screenModeDesc');
+  if (desc) desc.textContent = isAuto
+    ? 'Sinyal BUY langsung dieksekusi 100% posisi tanpa konfirmasi manual.'
+    : 'Sinyal BUY masuk queue, tunggu /approve di Telegram atau klik approve di dashboard.';
+  const ovBadge = document.getElementById('autoModeOverviewBadge');
+  if (ovBadge) ovBadge.style.display = isAuto ? '' : 'none';
+  const pendBadge = document.getElementById('autoModePendingBadge');
+  if (pendBadge) pendBadge.style.display = isAuto ? '' : 'none';
+}
+
+// ── Render Positions ──────────────────────────────────────────────────────────
+function renderOvPositions(positions) {
+  const tbody = document.getElementById('ov-positions-body');
+  const entries = Object.entries(positions || {});
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">Tidak ada posisi terbuka</td></tr>'; return; }
+  tbody.innerHTML = entries.map(([sym, p]) => posRow(sym, p)).join('');
+}
+
+function renderPositionsPage(positions) {
+  const tbody = document.getElementById('pos-body');
+  const entries = Object.entries(positions || {});
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">Tidak ada posisi terbuka</td></tr>'; return; }
+  tbody.innerHTML = entries.map(([sym, p]) => posRowFull(sym, p)).join('');
+}
+
+function posRow(sym, p) {
+  const pnlPct  = p.pnlPct;
+  const pnlUsdt = p.pnlUsdt;
+  const sign    = pnlPct >= 0 ? '+' : '';
+  const cls     = pnlPct >= 0 ? 'green' : 'red';
+  const hasBEP  = p.hasBEP;
+  const trail   = p.trailingActive;
+  const holdH   = ((Date.now() - new Date(p.openedAt)) / 3600000).toFixed(1);
+  const status  = [hasBEP && '<span class="badge green">BEP</span>', trail && '<span class="badge blue">TRAIL</span>'].filter(Boolean).join(' ') || '<span class="badge gray">ACTIVE</span>';
+  return `<tr>
+    <td class="c-title"><b>${sym}</b><br><span style="color:var(--muted);font-size:10px">SATS 4H</span></td>
+    <td data-label="Entry">${p.entryPrice}</td><td data-label="Current">${p.currentPrice ?? '—'}</td>
+    <td data-label="PnL %"><span class="badge ${cls}">${sign}${pnlPct?.toFixed(2) ?? '—'}%</span></td>
+    <td data-label="PnL USDT" style="color:var(--${cls})">${sign}${pnlUsdt?.toFixed(2) ?? '—'} USDT</td>
+    <td data-label="Status">${status}</td><td data-label="Hold">${holdH}h</td>
+    <td class="c-actions"><button class="btn sm danger" onclick="quickSell('${sym}')">Sell</button></td>
+  </tr>`;
+}
+
+function posRowFull(sym, p) {
+  const pnlPct  = p.pnlPct;
+  const pnlUsdt = p.pnlUsdt;
+  const sign    = pnlPct >= 0 ? '+' : '';
+  const cls     = pnlPct >= 0 ? 'green' : 'red';
+  const hasBEP  = p.hasBEP;
+  const trail   = p.trailingActive;
+  const openedAt = new Date(p.openedAt).toLocaleString('id-ID');
+  const status  = [hasBEP && '<span class="badge green">BEP✓</span>', trail && '<span class="badge blue">🔻TRAIL</span>'].filter(Boolean).join(' ') || '<span class="badge gray">ACTIVE</span>';
+  return `<tr>
+    <td class="c-title"><b>${sym}</b></td>
+    <td data-label="Entry">${p.entryPrice}</td><td data-label="Current">${p.currentPrice ?? '—'}</td>
+    <td data-label="PnL %"><span class="badge ${cls}">${sign}${pnlPct?.toFixed(2) ?? '—'}%</span></td>
+    <td data-label="PnL USDT" style="color:var(--${cls})">${sign}${pnlUsdt?.toFixed(2) ?? '—'}</td>
+    <td data-label="Qty">${p.quantity}</td>
+    <td data-label="SL" style="color:var(--red)">${(p.effectiveSL ?? p.slPrice)?.toFixed(6) ?? '—'}</td>
+    <td data-label="Status">${status}</td>
+    <td data-label="Opened" style="font-size:10px">${openedAt}</td>
+    <td class="c-actions"><button class="btn sm danger" onclick="quickSell('${sym}')">Sell</button></td>
+  </tr>`;
+}
+
+// ── AI badge untuk kandidat pending ──────────────────────────────────────────
+function aiBadge(p) {
+  if (!p.aiVerdict) return '<span class="badge gray">belum dinilai</span>';
+  const cls = { BUY_NOW: 'green', WAIT: 'yellow', SKIP: 'red' }[p.aiVerdict] || 'gray';
+  const lbl = { BUY_NOW: 'BUY', WAIT: 'WAIT', SKIP: 'AVOID' }[p.aiVerdict] || p.aiVerdict;
+  return `<span class="ai-chip"><b>#${p.aiRank ?? '-'}</b><span class="badge ${cls}">${lbl}</span><span style="color:var(--muted)">${p.aiConfidence ?? '—'}/100</span></span>`;
+}
+
+function renderOvPending(pending) {
+  const tbody  = document.getElementById('ov-pending-body');
+  const isAuto = _data?.config?.autoExecute ?? false;
+  if (!pending?.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">${isAuto ? '🤖 Auto mode aktif — sinyal langsung dieksekusi' : 'Tidak ada kandidat pending'}</td></tr>`;
+    return;
+  }
+  const sorted = [...pending].sort((a, b) => (a.aiRank ?? 999) - (b.aiRank ?? 999));
+  tbody.innerHTML = sorted.map(p => {
+    return `<tr>
+      <td class="c-title"><b>${p.symbol}</b></td>
+      <td data-label="Price">${p.lastPrice}</td>
+      <td data-label="Vol 24h">$${((p.vol24h||0)/1e6).toFixed(1)}M</td>
+      <td data-label="AI">${aiBadge(p)}</td>
+      <td data-label="Sisa">${p.minsLeft}m</td>
+      <td class="c-actions"><div class="action-group">
+        <button class="btn sm success" onclick="approve('${p.symbol}','entry1')">E1</button>
+        <button class="btn sm" onclick="approve('${p.symbol}','entry2')">E2</button>
+        <button class="btn sm primary" onclick="approve('${p.symbol}','all')">All</button>
+        <button class="btn sm danger" onclick="skip('${p.symbol}')">Skip</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderPendingPage(pending) {
+  const container = document.getElementById('pending-cards');
+  const isAuto    = _data?.config?.autoExecute ?? false;
+  if (!pending?.length) {
+    container.innerHTML = `<div class="empty">${isAuto ? '🤖 Auto Execute aktif — sinyal langsung dieksekusi tanpa masuk queue' : 'Tidak ada kandidat pending'}</div>`;
+    return;
+  }
+  const sorted = [...pending].sort((a, b) => (a.aiRank ?? 999) - (b.aiRank ?? 999));
+  container.innerHTML = sorted.map(p => {
+    const trig   = p.triggered ? '<span class="badge green">⚡ TRIGGERED</span>' : '<span class="badge yellow">⏳ Pending</span>';
+    const sigHtml = Object.entries(p.signals || {}).filter(([,v]) => v?.bullish).map(([,v]) => `<span class="badge green" style="margin:2px">✓ ${escHtml(v.label)}</span>`).join('');
+    const aiBlock = p.aiVerdict ? `
+        <div style="margin-top:10px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">🧠 AI Ranking</div>
+          <div>${aiBadge(p)}</div>
+          <div style="margin-top:6px;font-size:12px;line-height:1.5">${escHtml(p.aiSummary || '')}</div>
+        </div>` : '';
+    return `
+    <div style="border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        ${p.aiRank ? `<span class="rank-no">#${p.aiRank}</span>` : ''}
+        <b style="font-size:15px">${p.symbol}</b>
+        <span class="badge gray">📡 SATS 4H${p.preset ? ' · ' + p.preset : ''}</span>
+        ${p.tqi != null ? '<span class="badge blue">TQI ' + Number(p.tqi).toFixed(2) + '</span>' : ''}
+        ${p.riskPct != null ? '<span class="badge yellow">risiko SL ' + Number(p.riskPct).toFixed(1) + '%</span>' : ''}
+        ${trig}
+        <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)">⏰ sisa ${p.minsLeft}m</span>
+      </div>
+      <div style="padding:14px 16px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Signals</div>
+        <div>${sigHtml || '<span style="color:var(--muted);font-size:11px">—</span>'}</div>
+        ${p.slPrice ? `<div style="margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--red)">SL ref: ${p.slPrice?.toFixed(6)}</div>` : ''}
+        ${aiBlock}
+      </div>
+      <div class="pc-actions" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn success" onclick="approve('${p.symbol}','entry1')">▲ Entry 1 (55%)</button>
+        <button class="btn" onclick="approve('${p.symbol}','entry2')">Entry 2 (45%)</button>
+        <button class="btn primary" onclick="approve('${p.symbol}','all')">Full (100%)</button>
+        <button class="btn sm" onclick="triggerAnalyze('${p.symbol}')" style="margin-left:auto">🤖 AI Analyst</button>
+        <button class="btn danger" onclick="skip('${p.symbol}')">Skip</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTradeForm(d) {
+  document.getElementById('buy-budget').textContent  = d.config?.budgetPerTrade ?? '—';
+  document.getElementById('buy-maxpos').textContent  = d.config?.maxOpenPositions ?? '—';
+  document.getElementById('buy-openpos').textContent = d.stats?.openPositions ?? '—';
+  const sel = document.getElementById('sell-symbol');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Pilih posisi —</option>' + Object.keys(d.positions || {}).map(s => `<option value="${s}" ${s===cur?'selected':''}>${s}</option>`).join('');
+  sel.onchange = () => updateSellPreview(d.positions);
+  if (cur) updateSellPreview(d.positions);
+}
+
+function updateSellPreview(positions) {
+  const sym = document.getElementById('sell-symbol').value;
+  const p   = positions?.[sym];
+  const el  = document.getElementById('sell-preview');
+  if (!p) { el.innerHTML = 'Pilih posisi untuk lihat detail'; return; }
+  const pnl  = p.pnlPct;
+  const sign = pnl >= 0 ? '+' : '';
+  const cls  = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+  el.innerHTML = `Entry: ${p.entryPrice}<br>Current: ${p.currentPrice ?? '—'}<br>PnL: <span style="color:${cls}">${sign}${pnl?.toFixed(2) ?? '—'}% (${sign}${p.pnlUsdt?.toFixed(2) ?? '—'} USDT)</span><br>Qty: ${p.quantity}`;
+}
+
+// ── AI Ranking page ──────────────────────────────────────────────────────────
+const DECISION_CLS  = { BUY: 'green', WAIT: 'yellow', AVOID: 'red' };
+const SENTIMENT_CLS = { POSITIF: 'green', NETRAL: 'yellow', NEGATIF: 'red' };
+const UNLOCK_CLS    = { TIDAK_ADA: 'green', RENDAH: 'yellow', TINGGI: 'red', UNKNOWN: 'gray' };
+const MACRO_CLS     = { RENDAH: 'green', SEDANG: 'yellow', TINGGI: 'red' };
+
+function renderRanking(res) {
+  const body  = document.getElementById('rank-body');
+  const macro = document.getElementById('rank-macro');
+  const meta  = document.getElementById('rank-meta');
+  const btn   = document.getElementById('rankBtn');
+
+  btn.disabled  = !!res?.running;
+  btn.innerHTML = res?.running ? '<span class="spin"></span> Meranking...' : '🧠 Rank Pending Queue';
+
+  if (res?.running) {
+    body.innerHTML = '<tr><td colspan="8" class="empty"><span class="spin"></span> AI sedang meriset sentimen, token unlock & jadwal makro... (1–3 menit)</td></tr>';
+    macro.style.display = 'none';
+    meta.textContent = '';
+    return;
+  }
+
+  const r = res?.ranking;
+  if (!r || !r.results?.length) {
+    body.innerHTML = `<tr><td colspan="8" class="empty">${res?.error ? '❌ ' + escHtml(res.error) : 'Belum ada hasil ranking. Akan muncul setelah screening menemukan sinyal BUY.'}</td></tr>`;
+    macro.style.display = 'none';
+    meta.textContent = '';
+    return;
+  }
+
+  const when = new Date(r.at);
+  meta.textContent = `${when.toLocaleString('id-ID')} · ${r.source || ''} · ${r.provider || ''}`;
+
+  const m = r.macro || {};
+  macro.style.display = 'flex';
+  macro.innerHTML = `
+    <div><div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px">Risiko Makro</div>
+      <span class="badge ${MACRO_CLS[m.risk] || 'gray'}" style="font-size:12px;padding:4px 10px">${escHtml(m.risk || '—')}</span></div>
+    <div style="flex:1">${escHtml(m.summary || 'Tidak ada ringkasan makro.')}
+      ${m.searched === false ? '<div style="color:var(--yellow);margin-top:4px">⚠️ Riset makro tanpa web search — tidak terverifikasi</div>' : ''}</div>`;
+
+  const pendingSyms = new Set((_data?.pending || []).map(p => p.symbol));
+  body.innerHTML = r.results.map(x => {
+    const sc  = Math.max(0, Math.min(100, x.score || 0));
+    const scc = x.decision === 'BUY' ? 'green' : x.decision === 'WAIT' ? 'yellow' : 'red';
+    const act = pendingSyms.has(x.symbol)
+      ? `<div class="action-group">
+           <button class="btn sm primary" onclick="approve('${x.symbol}','all')">Beli</button>
+           <button class="btn sm danger" onclick="skip('${x.symbol}')">Skip</button>
+         </div>`
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+    return `<tr>
+      <td class="c-hide"><span class="rank-no">${x.rank}</span></td>
+      <td class="c-title"><span class="only-m rank-no">#${x.rank}</span> <b>${escHtml(x.symbol)}</b></td>
+      <td data-label="Keputusan"><span class="badge ${DECISION_CLS[x.decision] || 'gray'}">${escHtml(x.decision)}</span></td>
+      <td data-label="Skor"><span class="sbar ${scc}"><i style="width:${sc}%"></i></span>${sc}</td>
+      <td data-label="Sentimen"><span class="badge ${SENTIMENT_CLS[x.sentiment] || 'gray'}">${escHtml(x.sentiment)}</span></td>
+      <td data-label="Token Unlock"><span class="badge ${UNLOCK_CLS[x.unlockRisk] || 'gray'}">${escHtml(x.unlockRisk)}</span>${x.searched === false ? ' <span title="Tanpa web search — tidak terverifikasi">⚠️</span>' : ''}</td>
+      <td class="reason-cell" data-label="Alasan">${escHtml(x.reason)}</td>
+      <td class="c-actions">${act}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadRanking() {
+  let res;
+  try { res = await apiFetch('/api/ranking'); }
+  catch (e) { toast('Gagal memuat ranking', 'err'); return; }
+  renderRanking(res);
+  if (res.running && !_rankTimer) _rankTimer = setInterval(loadRanking, 4000);
+  if (!res.running && _rankTimer) { clearInterval(_rankTimer); _rankTimer = null; if (res.ranking) refreshAll(); }
+}
+
+async function runRank() {
+  const res = await apiPost('/api/rank', {});
+  if (!res.ok) { toast('❌ ' + res.error, 'err'); return; }
+  toast('🧠 ' + (res.message || 'Ranking dimulai'), 'ok');
+  loadRanking();
+}
+
+// ── AI Report renderer ─────────────────────────────────────────────────────
+function renderAIReport(analysis, container) {
+  if (!analysis) { container.innerHTML = '<div class="empty">AI analisa tidak tersedia</div>'; return; }
+  const vmap  = {BUY_NOW:'green',WAIT:'yellow',SKIP:'red'};
+  const smap  = {BULLISH:'green',NEUTRAL:'yellow',BEARISH:'red'};
+  const tmap  = {BULLISH:'🟢',NEUTRAL:'🟡',BEARISH:'🔴'};
+  const bar   = confBar(analysis.confidence);
+
+  container.innerHTML = `
+  <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <span class="badge ${vmap[analysis.verdict]||'gray'}" style="font-size:13px;padding:5px 12px">${analysis.verdict}</span>
+      <span style="font-family:var(--mono);font-size:13px">${bar} ${analysis.confidence}%</span>
+      <span style="font-size:12px;color:var(--muted)">${analysis.summary || ''}</span>
+    </div>
+    <div class="grid-2 gap20">
+      <div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">🚀 Validasi Momentum</div>
+        <div style="font-family:var(--mono);font-size:11px;line-height:1.8">
+          Volume  : ${analysis.momentum?.volumeRatio || '—'}<br>
+          RSI     : ${analysis.momentum?.rsiStatus || '—'}<br>
+          Karakter: ${analysis.momentum?.pumpOrBreakout || '—'}
+        </div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 8px">📡 Level Sinyal (SL / TP)</div>
+        <div style="font-family:var(--mono);font-size:11px;line-height:1.8">
+          SL: <span style="color:var(--red)">${analysis.utbotSignal?.slLevel || '—'}</span> (${analysis.utbotSignal?.riskPct || '—'})<br>
+          Entry     : ${analysis.utbotSignal?.entryIdeal || '—'}<br>
+          TP1       : <span style="color:var(--green)">${analysis.utbotSignal?.tp1Level || '—'}</span><br>
+          R:R       : <b>${analysis.utbotSignal?.rrRatio || '—'}</b>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">📈 Trend Alignment ${analysis.trendAlignment?.aligned ? '✅' : '⚠️'}</div>
+        <div style="font-family:var(--mono);font-size:11px;line-height:1.8">
+          1D: ${tmap[analysis.trendAlignment?.daily]||'⚪'} ${analysis.trendAlignment?.daily||'—'}<br>
+          4H: ${tmap[analysis.trendAlignment?.h4]||'⚪'} ${analysis.trendAlignment?.h4||'—'}<br>
+          1H: ${tmap[analysis.trendAlignment?.h1]||'⚪'} ${analysis.trendAlignment?.h1||'—'}<br>
+          <span style="color:var(--muted)">${analysis.trendAlignment?.note||''}</span>
+        </div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 8px">🌐 Sentiment <span class="badge ${smap[analysis.sentiment?.overall]||'gray'}">${analysis.sentiment?.overall||'—'}</span></div>
+        <div style="font-family:var(--mono);font-size:11px;line-height:1.8">
+          Katalis: <span style="color:var(--green)">${analysis.sentiment?.catalysts||'—'}</span><br>
+          Risiko : <span style="color:var(--red)">${analysis.sentiment?.risks||'—'}</span>
+        </div>
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 8px">🎯 Key Levels</div>
+        <div style="font-family:var(--mono);font-size:11px;line-height:1.8">
+          Harga  : ${analysis.keyLevels?.currentPrice||'—'}<br>
+          Resist : <span style="color:var(--red)">${analysis.keyLevels?.resistance1||'—'}</span><br>
+          Support: <span style="color:var(--green)">${analysis.keyLevels?.support1||'—'}</span><br>
+          Kritis : ${analysis.keyLevels?.criticalLevel||'—'}
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:14px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">💡 Rekomendasi</div>
+      <div style="font-size:13px;line-height:1.7">${analysis.recommendation||'—'}</div>
+    </div>
+  </div>`;
+}
+
+// ── Actions ────────────────────────────────────────────────────────────────
+async function approve(symbol, type) {
+  const p = _data?.pending?.find(x => x.symbol === symbol);
+  const warn = p?.aiVerdict === 'SKIP' ? '\n\n⚠️ AI menilai AVOID untuk koin ini.' : '';
+  if (!confirm(`Approve ${symbol} (${type})?${warn}`)) return;
+  const res = await apiPost('/api/approve', { symbol, type });
+  toast(res.ok ? `✅ ${symbol} ${type} dieksekusi` : `❌ ${res.error || res.reason}`, res.ok ? 'ok' : 'err');
+  if (res.ok) setTimeout(() => { refreshAll(); loadRanking(); }, 1500);
+}
+
+async function skip(symbol) {
+  if (!confirm(`Skip ${symbol}?`)) return;
+  const res = await apiPost('/api/skip', { symbol });
+  toast(res.ok ? `⏭ ${symbol} diskip` : `❌ ${res.error || res.reason}`, res.ok ? 'ok' : 'err');
+  if (res.ok) setTimeout(() => { refreshAll(); loadRanking(); }, 800);
+}
+
+async function quickSell(symbol) {
+  if (!confirm(`Jual ${symbol} sekarang?`)) return;
+  const res = await apiPost('/api/sell', { symbol });
+  toast(res.ok ? `✅ ${symbol} dijual` : `❌ ${res.error}`, res.ok ? 'ok' : 'err');
+  if (res.ok) setTimeout(refreshAll, 1500);
+}
+
+async function doBuy() {
+  const sym = document.getElementById('buy-symbol').value.trim().toUpperCase();
+  if (!sym) { toast('Masukkan symbol', 'err'); return; }
+  if (!confirm(`Beli ${sym}?`)) return;
+  const res = await apiPost('/api/buy', { symbol: sym });
+  toast(res.ok || res.success ? `✅ BUY ${sym} berhasil` : `❌ ${res.error || res.message}`, res.ok || res.success ? 'ok' : 'err');
+  if (res.ok || res.success) { document.getElementById('buy-symbol').value = ''; setTimeout(refreshAll, 1500); }
+}
+
+async function doSell() {
+  const sym = document.getElementById('sell-symbol').value;
+  if (!sym) { toast('Pilih posisi dulu', 'err'); return; }
+  if (!confirm(`Jual ${sym}?`)) return;
+  const res = await apiPost('/api/sell', { symbol: sym });
+  toast(res.ok ? `✅ SELL ${sym} berhasil` : `❌ ${res.error}`, res.ok ? 'ok' : 'err');
+  if (res.ok) setTimeout(refreshAll, 1500);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  let _priceTimer;
+  const inp = document.getElementById('buy-symbol');
+  if (inp) inp.addEventListener('input', () => {
+    clearTimeout(_priceTimer);
+    _priceTimer = setTimeout(async () => {
+      const sym = inp.value.trim().toUpperCase();
+      if (!sym) return;
+      try {
+        const res = await apiFetch(`/api/price/${sym}`);
+        document.getElementById('buy-price-preview').textContent = res.price ? `Current price: ${res.price} USDT` : 'Symbol tidak ditemukan';
+      } catch {}
+    }, 600);
+  });
+});
+
+async function doScreen() {
+  await apiPost('/api/screen', {});
+  toast(`📡 SATS 4H scanning dimulai di background`, '');
+  const box = document.getElementById('screen-log');
+  box.style.display = 'block';
+  const isAuto = _data?.config?.autoExecute ?? false;
+  const aiOn   = _data?.config?.aiFilterEnabled ?? false;
+  box.textContent = `SATS 4H scanning berjalan...\nMode: ${isAuto ? '🤖 AUTO EXECUTE' : '✋ Manual Approve'}\nAI Filter: ${aiOn ? '🧠 ON (tambah 1–3 menit untuk riset)' : 'OFF'}\nPantau di Bot Logs`;
+  setTimeout(() => { showPage('logs'); loadLogs(); }, 2000);
+}
+
+async function doManage() {
+  await apiPost('/api/manage', {});
+  toast('⚙ Management cycle dimulai');
+}
+
+// Analisa berjalan di background server; browser polling tiap 3 detik
+// (kebal terhadap timeout proxy/tunnel pada request yang lama)
+async function doAnalyze() {
+  const sym = document.getElementById('ai-symbol').value.trim().toUpperCase();
+  if (!sym) { toast('Masukkan symbol', 'err'); return; }
+  const btn  = document.getElementById('analyzeBtn');
+  const body = document.getElementById('ai-result-body');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Analyzing...';
+  document.getElementById('ai-result').style.display = 'block';
+  document.getElementById('ai-result-title').textContent = `🤖 AI Report — ${sym}`;
+  body.innerHTML = `<div class="empty"><span class="spin"></span> Menganalisa ${escHtml(sym)}... (1–2 menit)</div>`;
+
+  try {
+    const start = await apiPost('/api/analyze', { symbol: sym });
+    if (!start.ok) throw new Error(start.error || 'Gagal memulai analisa');
+
+    const t0 = Date.now();
+    while (Date.now() - t0 < 5 * 60 * 1000) {
+      await new Promise(r => setTimeout(r, 3000));
+      let st;
+      try { st = await apiFetch('/api/analyze?symbol=' + encodeURIComponent(sym)); }
+      catch { continue; }                 // gangguan sesaat -> coba lagi
+      if (st.running) continue;
+      if (st.analysis) renderAIReport(st.analysis, body);
+      else body.innerHTML = `<div class="empty" style="color:var(--red)">Error: ${escHtml(st.error || 'Analisa gagal')}</div>`;
+      return;
+    }
+    body.innerHTML = '<div class="empty" style="color:var(--red)">Timeout menunggu hasil. Cek Bot Logs.</div>';
+  } catch (e) {
+    body.innerHTML = `<div class="empty" style="color:var(--red)">Gagal: ${escHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Analyze';
+  }
+}
+
+function triggerAnalyze(symbol) {
+  document.getElementById('ai-symbol').value = symbol;
+  showPage('analyze');
+  doAnalyze();
+}
+
+// ── Laporan PnL Harian ─────────────────────────────────────────────────────
+const _openDays = new Set();
+let _pnlInit = false;
+const DAYS_ID   = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
+const MONTHS_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+const REASON_MAP = {
+  take_profit:    ['🎯', 'Take Profit'],
+  stop_loss:      ['🛑', 'Stop Loss'],
+  break_even_sl:  ['🔁', 'Break Even'],
+  trailing_stop:  ['🔻', 'Trailing Stop'],
+  utbot_sell:     ['📡', 'SATS Flip Sell'],
+  max_hold_time:  ['⏰', 'Max Hold'],
+  manual_sell:    ['🖐', 'Manual Sell'],
+  manual_partial: ['🖐', 'Manual Partial'],
+};
+
+function wib(iso)      { return new Date(new Date(iso).getTime() + 7 * 3600000); }   // WIB (UTC+7)
+function pad2(n)       { return String(n).padStart(2, '0'); }
+function dayKey(iso)   { const d = wib(iso); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`; }
+function dayLabel(iso) { const d = wib(iso); return `${DAYS_ID[d.getUTCDay()]}, ${d.getUTCDate()} ${MONTHS_ID[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+function timeLabel(iso){ const d = wib(iso); return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}, ${pad2(d.getUTCHours())}.${pad2(d.getUTCMinutes())}.${pad2(d.getUTCSeconds())}`; }
+function fmtSigned(n, dec = 2) { return (n >= 0 ? '+' : '') + Number(n).toFixed(dec); }
+function fmtPx(p)      { return p == null ? '—' : Number(p).toPrecision(6); }
+
+function toggleDay(key) {
+  const row = document.getElementById('pnl-d-' + key);
+  const arr = document.getElementById('pnl-a-' + key);
+  if (!row) return;
+  const open = row.style.display === 'none';
+  row.style.display = open ? 'table-row' : 'none';
+  if (arr) arr.textContent = open ? '▾' : '▸';
+  if (open) _openDays.add(key); else _openDays.delete(key);
+}
+
+async function loadHistory() {
+  const days = document.getElementById('pnl-days')?.value || 30;
+  const body = document.getElementById('pnl-body');
+  const sum  = document.getElementById('pnl-summary');
+  let res;
+  try { res = await apiFetch('/api/pnl?days=' + days); }
+  catch (e) { body.innerHTML = '<tr><td colspan="4" class="empty">Gagal memuat laporan</td></tr>'; return; }
+
+  if (!res.ok || !res.trades?.length) {
+    body.innerHTML = '<tr><td colspan="4" class="empty">Belum ada deal yang ditutup pada periode ini</td></tr>';
+    sum.innerHTML = '';
+    return;
+  }
+
+  // Kelompokkan per tanggal (WIB). Trades sudah urut terbaru -> terlama.
+  const groups = new Map();
+  for (const t of res.trades) {
+    const k = dayKey(t.closedAt);
+    if (!groups.has(k)) groups.set(k, { label: dayLabel(t.closedAt), trades: [] });
+    groups.get(k).trades.push(t);
+  }
+
+  if (!_pnlInit) { _openDays.add(groups.keys().next().value); _pnlInit = true; }
+
+  let totPnl = 0, totDeals = 0, totWins = 0;
+  const html = [];
+
+  for (const [key, g] of groups) {
+    const auto  = g.trades.filter(t => !t.manual);
+    const wins  = auto.filter(t => t.pnlUsdt > 0).length;
+    const pnl   = auto.reduce((s, t) => s + t.pnlUsdt, 0);
+    totPnl += pnl; totDeals += auto.length; totWins += wins;
+
+    const wr    = auto.length ? `${wins}/${auto.length} <span style="color:var(--muted)">(${Math.round(wins / auto.length * 100)}%)</span>` : '—';
+    const cls   = pnl >= 0 ? 'green' : 'red';
+    const open  = _openDays.has(key);
+
+    html.push(`<tr onclick="toggleDay('${key}')" style="cursor:pointer">
+      <td><span id="pnl-a-${key}">${open ? '▾' : '▸'}</span> <b>${g.label}</b></td>
+      <td>${auto.length}${g.trades.length > auto.length ? ` <span class="badge gray">+${g.trades.length - auto.length} manual</span>` : ''}</td>
+      <td>${wr}</td>
+      <td style="color:var(--${cls})">${auto.length ? fmtSigned(pnl) + ' USDT' : '—'}</td>
+    </tr>`);
+
+    const rows = g.trades.map(t => {
+      const c  = t.pnlUsdt >= 0 ? 'green' : 'red';
+      const rm = REASON_MAP[t.reason] || ['•', t.reason || '—'];
+      return `<tr>
+        <td class="c-title"><b>${escHtml(t.symbol)}</b></td>
+        <td data-label="Entry">${fmtPx(t.entryPrice)}</td>
+        <td data-label="Exit">${fmtPx(t.exitPrice)}</td>
+        <td data-label="PnL %" style="color:var(--${c})">${fmtSigned(t.pnlPct)}%</td>
+        <td data-label="PnL USDT" style="color:var(--${c})">${fmtSigned(t.pnlUsdt)} USDT</td>
+        <td data-label="Fee" style="color:var(--muted)">${Number(t.fee).toFixed(4)} USDT</td>
+        <td data-label="Alasan">${rm[0]} ${escHtml(rm[1])}${t.manual ? ' <span class="badge gray">tidak dihitung</span>' : ''}</td>
+        <td data-label="Waktu" style="font-size:11px">${timeLabel(t.closedAt)}</td>
+      </tr>`;
+    }).join('');
+
+    html.push(`<tr id="pnl-d-${key}" style="display:${open ? 'table-row' : 'none'}">
+      <td colspan="4" style="padding:0;background:var(--bg)">
+        <table class="tbl cards">
+          <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT (net fee)</th><th>Fee</th><th>Reason</th><th>Waktu</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </td>
+    </tr>`);
+  }
+
+  body.innerHTML = html.join('');
+
+  const tc = totPnl >= 0 ? 'green' : 'red';
+  sum.innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total PnL (${days} hari)</div><div class="stat-value ${tc}">${fmtSigned(totPnl)}</div><div class="stat-sub">USDT, net fee estimasi ${res.feePct}%/sisi</div></div>
+    <div class="stat-card"><div class="stat-label">Deal Ditutup</div><div class="stat-value">${totDeals}</div><div class="stat-sub">di luar manual sell</div></div>
+    <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-value">${totDeals ? Math.round(totWins / totDeals * 100) : 0}%</div><div class="stat-sub">${totWins}/${totDeals} menang</div></div>`;
+}
+
+async function loadLogs() {
+  const res = await apiFetch('/api/logs?n=200');
+  const box = document.getElementById('log-box');
+  if (!res.ok) { box.textContent = 'Gagal memuat log'; return; }
+  box.innerHTML = res.logs.map(line => {
+    const cls = line.includes('ERROR') || line.includes('_error') ? 'log-err'
+      : line.includes('WARN') ? 'log-warn'
+      : line.includes('✅') || line.includes('BUY') || line.includes('SELL') ? 'log-ok'
+      : line.includes('AI') || line.includes('ai_') ? 'log-ai' : '';
+    return `<span class="${cls}">${escHtml(line)}</span>`;
+  }).join('\n');
+  box.scrollTop = box.scrollHeight;
+}
+
+function toggleAutoLog() {
+  _autoLog = !_autoLog;
+  document.getElementById('autoLogBtn').textContent = `Auto: ${_autoLog ? 'ON' : 'OFF'}`;
+  if (_autoLog) { _logTimer = setInterval(loadLogs, 5000); loadLogs(); }
+  else { clearInterval(_logTimer); }
+}
+
+async function loadConfig() {
+  const res = await apiFetch('/api/config');
+  if (!res.ok) return;
+  _fullConfig = res.config;
+  const cfg  = res.config;
+  const mgmt = cfg.management || {};
+  const trade = cfg.trading || {};
+  const sats = cfg.screening?.sats || {}, satsCustom = sats.custom || {}, satsF = sats.filters || {};
+  const presetOpt = p => '<option value="' + p + '"' + ((sats.preset || 'default') === p ? ' selected' : '') + '>' + p + '</option>';
+  const ai     = cfg.ai || {};
+  const isAuto = trade.autoExecute ?? false;
+
+  document.getElementById('config-grid').innerHTML = `
+    <div class="field" style="grid-column:1/-1">
+      <label>Entry Mode</label>
+      <div style="display:flex;gap:24px;padding:10px 0;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:400">
+          <input type="radio" name="entryMode" id="cfg-manual" value="manual" ${!isAuto ? 'checked' : ''}>
+          <span>✋ <b>Manual Approve</b> — sinyal masuk queue, tunggu /approve</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:400">
+          <input type="radio" name="entryMode" id="cfg-auto" value="auto" ${isAuto ? 'checked' : ''}>
+          <span>🤖 <b>Auto Execute</b> — langsung beli 100% saat sinyal muncul</span>
+        </label>
+      </div>
+    </div>
+    <div class="field"><label>Budget / Trade (USDT)</label><input id="cfg-budget" type="number" value="${trade.budgetPerTrade||100}"></div>
+    <div class="field"><label>Max Open Positions</label><input id="cfg-maxpos" type="number" value="${trade.maxOpenPositions||5}"></div>
+    <div class="field"><label>Stop Loss %</label><input id="cfg-sl" type="number" step="0.1" value="${Math.abs(mgmt.stopLossPct||5)}"></div>
+    <div class="field"><label>Trailing Callback % (dari peak)</label><input id="cfg-trail" type="number" step="0.1" value="${mgmt.trailingStop?.trailPct||2}"></div>
+    <div class="field"><label>Aktifkan Trailing di Profit % (SL geser ke entry)</label><input id="cfg-trail-activate" type="number" step="0.1" value="${mgmt.trailingStop?.activateAtProfitPct||10}"></div>
+    <div class="field"><label>Approval Timeout (menit)</label><input id="cfg-timeout" type="number" value="${trade.approvalTimeoutMin||30}"></div>
+    <div class="field"><label>Max Hold Hours (0 = nonaktif)</label><input id="cfg-maxhold" type="number" value="${mgmt.maxHoldHours ?? 120}"></div>
+    <div class="field"><label>Management Interval (menit)</label><input id="cfg-manage" type="number" value="${cfg.schedule?.managementIntervalMin||10}"></div>
+
+    <div class="cfg-section">📡 Self-Aware Trend System (4H)</div>
+    <div class="field"><label>Preset</label><select id="cfg-sats-preset">${['default','crypto','swing','scalping','custom'].map(presetOpt).join('')}</select></div>
+    <div class="field"><label>Interval Scan (menit)</label><input id="cfg-sats-interval" type="number" value="${sats.checkIntervalMin||240}"></div>
+    <div class="field"><label>Min Volume 24h (USD)</label><input id="cfg-vol" type="number" value="${sats.minVolume24h||3000000}"></div>
+    <div class="field"><label>Maks Sinyal BUY / Scan</label><input id="cfg-sats-max" type="number" value="${sats.maxSignalsPerRun||5}"></div>
+    <div class="field"><label>Custom: ATR Length</label><input id="cfg-sats-atr" type="number" value="${satsCustom.atrLen ?? 14}"></div>
+    <div class="field"><label>Custom: Base Mult (×ATR)</label><input id="cfg-sats-mult" type="number" step="0.1" value="${satsCustom.baseMult ?? 2}"></div>
+    <div class="field"><label>Custom: ER Length</label><input id="cfg-sats-er" type="number" value="${satsCustom.erLen ?? 20}"></div>
+    <div class="field"><label>Custom: SL Mult (×ATR)</label><input id="cfg-sats-slmult" type="number" step="0.1" value="${satsCustom.slMult ?? 1.5}"></div>
+    <div class="field"><label>Filter: Min TQI (0 = off)</label><input id="cfg-sats-mintqi" type="number" step="0.05" min="0" max="1" value="${satsF.minTqi ?? 0}"></div>
+    <div class="field"><label>Filter: Close &gt; EMA (4H)</label><select id="cfg-sats-ema-on"><option value="false" ${satsF.ema?.enabled ? '' : 'selected'}>Nonaktif</option><option value="true" ${satsF.ema?.enabled ? 'selected' : ''}>Aktif</option></select></div>
+    <div class="field"><label>EMA Period</label><input id="cfg-sats-ema-period" type="number" value="${satsF.ema?.period ?? 50}"></div>
+    <div class="field"><label>Filter: Batas Risiko SL</label><select id="cfg-sats-risk-on"><option value="false" ${satsF.maxRisk?.enabled ? '' : 'selected'}>Nonaktif</option><option value="true" ${satsF.maxRisk?.enabled ? 'selected' : ''}>Aktif</option></select></div>
+    <div class="field"><label>Maks Risiko SL (%)</label><input id="cfg-sats-risk-pct" type="number" step="0.5" value="${satsF.maxRisk?.maxPct ?? 10}"></div>
+    <div style="grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.6">Field "Custom" hanya dipakai bila preset = custom. Preset/filter berlaku di scan berikutnya; perubahan interval scan butuh restart bot.</div>
+    <div class="cfg-section">🧠 AI Filter &amp; Ranking</div>
+    <div class="field"><label>AI Filter</label>
+      <select id="cfg-ai-enabled"><option value="true" ${ai.filterEnabled ? 'selected' : ''}>Aktif</option><option value="false" ${!ai.filterEnabled ? 'selected' : ''}>Nonaktif</option></select></div>
+    <div class="field"><label>Maks Kandidat Dinilai</label><input id="cfg-ai-max" type="number" min="1" max="20" value="${ai.maxCandidates ?? 10}"></div>
+    <div class="field"><label>Skor Minimum (0–100)</label><input id="cfg-ai-minscore" type="number" min="0" max="100" value="${ai.minScore ?? 60}"></div>
+    <div class="field"><label>Izinkan Keputusan WAIT (auto mode)</label>
+      <select id="cfg-ai-wait"><option value="false" ${!ai.allowWait ? 'selected' : ''}>Tidak (hanya BUY)</option><option value="true" ${ai.allowWait ? 'selected' : ''}>Ya (BUY + WAIT)</option></select></div>
+    <div class="field"><label>Jika AI Gagal (auto mode)</label>
+      <select id="cfg-ai-failopen"><option value="false" ${!ai.failOpen ? 'selected' : ''}>Jangan beli (aman)</option><option value="true" ${ai.failOpen ? 'selected' : ''}>Tetap beli tanpa filter</option></select></div>
+    <div class="field"><label>Jeda Antar Riset (ms)</label><input id="cfg-ai-delay" type="number" step="500" value="${ai.researchDelayMs ?? 4000}"></div>
+  `;
+  document.getElementById('whitelist-editor').value = (cfg.whitelist || []).join('\n');
+}
+
+async function saveConfig() {
+  if (!_fullConfig) { toast('Load config dulu', 'err'); return; }
+  const autoExecute = document.getElementById('cfg-auto')?.checked ?? false;
+  const updates = {
+    trading: {
+      budgetPerTrade:     parseFloat(document.getElementById('cfg-budget').value),
+      maxOpenPositions:   parseInt(document.getElementById('cfg-maxpos').value),
+      approvalTimeoutMin: parseInt(document.getElementById('cfg-timeout').value),
+      autoExecute,
+    },
+    management: {
+      stopLossPct:   -Math.abs(parseFloat(document.getElementById('cfg-sl').value)),
+      maxHoldHours:  parseInt(document.getElementById('cfg-maxhold').value),
+      trailingStop:  { trailPct: parseFloat(document.getElementById('cfg-trail').value), activateAtProfitPct: parseFloat(document.getElementById('cfg-trail-activate').value) },
+    },
+    screening: {
+      sats: {
+        preset:           document.getElementById('cfg-sats-preset').value,
+        custom: {
+          atrLen:   parseInt(document.getElementById('cfg-sats-atr').value),
+          baseMult: parseFloat(document.getElementById('cfg-sats-mult').value),
+          erLen:    parseInt(document.getElementById('cfg-sats-er').value),
+          slMult:   parseFloat(document.getElementById('cfg-sats-slmult').value),
+        },
+        maxSignalsPerRun: parseInt(document.getElementById('cfg-sats-max').value) || 5,
+        filters: {
+          minTqi:  parseFloat(document.getElementById('cfg-sats-mintqi').value) || 0,
+          ema:     { enabled: document.getElementById('cfg-sats-ema-on').value === 'true', period: parseInt(document.getElementById('cfg-sats-ema-period').value) || 50 },
+          maxRisk: { enabled: document.getElementById('cfg-sats-risk-on').value === 'true', maxPct: parseFloat(document.getElementById('cfg-sats-risk-pct').value) || 10 },
+        },
+        checkIntervalMin: parseInt(document.getElementById('cfg-sats-interval').value),
+        minVolume24h:     parseFloat(document.getElementById('cfg-vol').value),
+      },
+    },
+    ai: {
+      filterEnabled:   document.getElementById('cfg-ai-enabled').value === 'true',
+      maxCandidates:   parseInt(document.getElementById('cfg-ai-max').value) || 10,
+      minScore:        parseInt(document.getElementById('cfg-ai-minscore').value) || 0,
+      allowWait:       document.getElementById('cfg-ai-wait').value === 'true',
+      failOpen:        document.getElementById('cfg-ai-failopen').value === 'true',
+      researchDelayMs: parseInt(document.getElementById('cfg-ai-delay').value) || 4000,
+    },
+    schedule: {
+      managementIntervalMin: parseInt(document.getElementById('cfg-manage').value),
+    },
+  };
+  const res = await apiPost('/api/config', updates);
+  toast(res.ok ? '✅ Config tersimpan' : `❌ ${res.error}`, res.ok ? 'ok' : 'err');
+  if (res.ok) refreshAll();
+}
+
+async function saveWhitelist() {
+  const lines = document.getElementById('whitelist-editor').value.split('\n').map(l => l.trim().toUpperCase()).filter(Boolean);
+  const res = await apiPost('/api/config', { whitelist: lines });
+  toast(res.ok ? `✅ Whitelist ${lines.length} koin tersimpan` : `❌ ${res.error}`, res.ok ? 'ok' : 'err');
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.addEventListener('click', e => { if (e.target.classList.contains('modal-bg')) closeModal(e.target.id); });
+
+function toggleNav() {
+  document.getElementById('sidenav').classList.toggle('open');
+  document.getElementById('navBackdrop').classList.toggle('show');
+}
+function closeNav() {
+  document.getElementById('sidenav')?.classList.remove('open');
+  document.getElementById('navBackdrop')?.classList.remove('show');
+}
+
+function showPage(name) {
+  closeNav();
+  const _c = document.getElementById('content'); if (_c) _c.scrollTop = 0;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name)?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => { if (n.getAttribute('onclick') === `showPage('${name}')`) n.classList.add('active'); });
+  if (name === 'history') loadHistory();
+  if (name === 'ranking') loadRanking();
+  if (name === 'logs')    { loadLogs(); if (_autoLog && !_logTimer) _logTimer = setInterval(loadLogs, 5000); }
+  if (name === 'config')  loadConfig();
+  if (name !== 'logs') { clearInterval(_logTimer); _logTimer = null; }
+}
+
+function toast(msg, type = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toastArea').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function confBar(pct) {
+  const f = Math.round((pct / 100) * 10);
+  return '█'.repeat(f) + '░'.repeat(10 - f);
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
