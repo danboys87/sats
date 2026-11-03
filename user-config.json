@@ -1,9 +1,9 @@
 {
   "trading": {
     "quoteAsset": "USDT",
-    "budgetPerTrade": 50,
+    "budgetPerTrade": 20,
     "maxOpenPositions": 5,
-    "gasReserve": 3,
+    "gasReserve": 2,
     "approvalTimeoutMin": 30,
     "manualApproval": true,
     "feePct": 0.1,
