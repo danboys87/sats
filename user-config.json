@@ -29,9 +29,9 @@
       "tpR": [1, 2, 3],
       "custom": {
         "atrLen": 14,
-        "baseMult": 2,
+        "baseMult": 2.8,
         "erLen": 20,
-        "slMult": 1.5
+        "slMult": 2.5
       },
       "advanced": {},
       "filters": {
