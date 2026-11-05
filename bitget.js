@@ -1,6 +1,9 @@
 /**
  * Bitget REST API Client
  * Docs: https://www.bitget.com/api-doc/spot/intro
+ *
+ * v4.3.1: tambah getSymbolInfo() + floorQty() — presisi quantity per-symbol
+ *         dari /api/v2/spot/public/symbols (menggantikan pembulatan hardcode 2 desimal).
  */
 import crypto from 'crypto';
 import axios  from 'axios';
@@ -79,6 +82,60 @@ export async function getAssetBalance(coin) {
   return Array.isArray(assets) ? (assets.find(a => a.coin === coin) || null) : null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SYMBOL INFO (presisi & minimum order) — cache 6 jam
+// ─────────────────────────────────────────────────────────────────────────────
+const SYMBOL_CACHE_TTL = 6 * 60 * 60 * 1000;
+let _symInfo     = new Map();
+let _symInfoAt   = 0;
+let _symInfoPromise = null;
+
+async function refreshSymbolInfo() {
+  const rows = await request('GET', '/api/v2/spot/public/symbols', {}, null, false);
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error('symbols kosong');
+  const m = new Map();
+  for (const s of rows) {
+    m.set(s.symbol, {
+      quantityPrecision: parseInt(s.quantityPrecision),
+      pricePrecision:    parseInt(s.pricePrecision),
+      minTradeAmount:    parseFloat(s.minTradeAmount) || 0,   // minimum qty (base coin)
+      minTradeUSDT:      parseFloat(s.minTradeUSDT)   || 0,   // minimum nilai order (USDT)
+    });
+  }
+  _symInfo   = m;
+  _symInfoAt = Date.now();
+  log('bitget', `Symbol info dimuat: ${m.size} pair`);
+}
+
+/**
+ * @returns {Promise<null | {quantityPrecision, pricePrecision, minTradeAmount, minTradeUSDT}>}
+ * null bila info tidak tersedia (jangan menebak presisi untuk order live).
+ */
+export async function getSymbolInfo(symbol) {
+  const stale = Date.now() - _symInfoAt > SYMBOL_CACHE_TTL;
+  if (_symInfo.size === 0 || stale) {
+    if (!_symInfoPromise) {
+      _symInfoPromise = refreshSymbolInfo()
+        .catch(err => log('bitget_warn', `Gagal muat symbol info: ${err.message}`))
+        .finally(() => { _symInfoPromise = null; });
+    }
+    await _symInfoPromise;
+  }
+  const info = _symInfo.get(symbol);
+  return (info && Number.isFinite(info.quantityPrecision)) ? info : null;
+}
+
+/**
+ * Bulatkan quantity KE BAWAH sesuai presisi.
+ * Return { qty: Number, str: String } — kirim `str` ke API (hindari notasi eksponen, mis. 1e-7).
+ */
+export function floorQty(qty, precision) {
+  const p = Math.max(0, Math.min(12, precision | 0));
+  const m = Math.pow(10, p);
+  const v = Math.floor(qty * m + 1e-9) / m;     // 1e-9: koreksi error floating point (0.29*100 = 28.999…)
+  return { qty: v, str: v.toFixed(p) };
+}
+
 export async function placeOrder({ symbol, side, orderType, size, quoteMode = false }) {
   const body = {
     symbol,
@@ -86,13 +143,8 @@ export async function placeOrder({ symbol, side, orderType, size, quoteMode = fa
     orderType,
     force:     'gtc',
     clientOid: `bot_${Date.now()}`,
+    size:      String(size),     // market buy: size = jumlah USDT | selain itu: jumlah coin
   };
-
-  if (side === 'buy' && orderType === 'market' && quoteMode) {
-    body.size = String(size);
-  } else {
-    body.size = String(size);
-  }
 
   return request('POST', '/api/v2/spot/trade/place-order', {}, body);
 }
