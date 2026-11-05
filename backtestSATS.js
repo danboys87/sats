@@ -3,6 +3,7 @@
  *
  * Meniru bot: BUY saat SATS flip bullish (entry di open candle berikutnya), exit saat flip bearish /
  * SL SATS / trailing / max hold, dengan batas max posisi dan budget tetap per trade.
+ * Filter entry memakai filters.js (sama persis dengan screenerSATS.js live).
  *
  * Cara pakai:
  *   node backtestSATS.js                              # preset dari user-config.json, top 30 koin, 90 hari
@@ -15,18 +16,25 @@
  *   --preset default|crypto|swing|scalping|custom
  *   --atr N --mult N --er N --sl-mult N      override parameter preset
  *   --char-flip                              aktifkan char-flip (versi yang berfungsi)
- *   --min-tqi N        filter BUY: TQI minimal N (0 = off)
- *   --ema N            filter BUY: close > EMA N di 4H (0 = off)
- *   --max-risk N       filter BUY: tolak bila jarak close→SL > N% (0 = off)
+ *
+ * Filter BUY (override config; angka 0 = off):
+ *   --min-tqi N     TQI minimal
+ *   --ema N         close > EMA N di 4H
+ *   --max-risk N    tolak bila jarak close→SL > N%
+ *   --vol-min N     volume candle sinyal >= N x rata-rata 20 candle
+ *   --rsi-max N     RSI 4H <= N
+ *   --ext-max N     (close - EMA21) / ATR <= N
+ *   --adx-min N     ADX 4H >= N
+ *   --btc-filter ema|sats|off   hanya beli bila BTC bullish (ema = close BTC > EMA --btc-ema, default 126)
+ *   --btc-ema N
+ *
+ * Exit / lainnya:
  *   --no-sl            tanpa stop loss (SL SATS dimatikan)
  *   --max-sl-pct N     batasi jarak SL maksimal N% dari entry (0 = tanpa batas)
  *   --trail-activate N aktifkan trailing di profit N% (0 = off)   --trail-pct N callback %
  *   --max-hold N       jam maksimal menahan posisi (0 = off)
  *   --no-sell-exit     jangan keluar saat flip bearish
- *   --btc-filter sats|ema   filter rezim BTC untuk BUY: hanya beli bila BTC bullish
- *                           sats = tren SATS 4H BTC bullish (preset default) | ema = close BTC > EMA N (4H)
- *   --btc-ema N             periode EMA untuk --btc-filter ema (default 126 ≈ EMA21 1D)
- *   --compare-btc           bandingkan baseline vs beberapa definisi filter BTC (tanpa trailing)
+ *   --compare-btc      bandingkan baseline vs beberapa definisi filter BTC (tanpa trailing) + kontrol acak
  *   --budget N --max-pos N --fee N --slip N --out DIR --refresh
  */
 
@@ -34,6 +42,7 @@ import fs   from 'fs';
 import path from 'path';
 import { config } from './config.js';
 import { calcSATS, resolveSATSParams, satsBuyLevels } from './sats.js';
+import { makeCtx, checkEntryFilters, btcRegimeMap, describeFilters } from './filters.js';
 
 const PERIOD = 4 * 3600 * 1000;
 const WARMUP = 250;
@@ -66,12 +75,28 @@ const BASE_SATS = {
   advanced: { ...(cfgS.advanced ?? {}), ...advFromCli },
 };
 
+// Filter: default dari user-config.json, bisa di-override lewat CLI
+function buildF() {
+  const F   = JSON.parse(JSON.stringify(cfgF));
+  const has = n => opt(n, undefined) !== undefined;
+  if (has('min-tqi'))  F.minTqi    = num('min-tqi');
+  if (has('ema'))      F.ema       = { enabled: num('ema') > 0,      period: num('ema') };
+  if (has('max-risk')) F.maxRisk   = { enabled: num('max-risk') > 0, maxPct: num('max-risk') };
+  if (has('vol-min'))  F.volume    = { ...(F.volume ?? {}),    enabled: num('vol-min') > 0, minRatio: num('vol-min') };
+  if (has('rsi-max'))  F.rsi       = { ...(F.rsi ?? {}),       enabled: num('rsi-max') > 0, max: num('rsi-max') };
+  if (has('ext-max'))  F.extension = { ...(F.extension ?? {}), enabled: num('ext-max') > 0, maxAtr: num('ext-max') };
+  if (has('adx-min'))  F.adx       = { ...(F.adx ?? {}),       enabled: num('adx-min') > 0, min: num('adx-min') };
+  if (has('btc-filter')) {
+    const v = String(opt('btc-filter'));
+    F.btcRegime = { enabled: v !== 'off', mode: v === 'sats' ? 'sats' : 'ema', period: num('btc-ema', F.btcRegime?.period ?? 126) };
+  }
+  return F;
+}
+
 const BASE_PARAMS = {
   budget:        num('budget', config.trading?.budgetPerTrade ?? 100),
   maxPos:        num('max-pos', config.trading?.maxOpenPositions ?? 5),
-  minTqi:        num('min-tqi', cfgF.minTqi ?? 0),
-  emaPeriod:     num('ema',     cfgF.ema?.enabled ? (cfgF.ema.period ?? 50) : 0),
-  maxRiskPct:    num('max-risk', cfgF.maxRisk?.enabled ? (cfgF.maxRisk.maxPct ?? 10) : 0),
+  F:             buildF(),
   slMode:        argv.includes('--no-sl') ? 'none' : 'sats',
   maxSlPct:      num('max-sl-pct', mg.maxSlPct ?? 0),
   tpR:           cfgS.tpR ?? [1, 2, 3],
@@ -82,8 +107,6 @@ const BASE_PARAMS = {
   exitOnSell:    !argv.includes('--no-sell-exit') && mg.exitOnUTBotSell !== false,
   feePct:        num('fee', config.trading?.feePct ?? 0.1),
   slipPct:       num('slip', 0.05),
-  btcFilter:     String(opt('btc-filter', 'off')),   // off | sats | ema
-  btcEma:        num('btc-ema', 126),
 };
 const DAYS    = num('days', 90);
 const TOP_N   = num('top', 30);
@@ -109,23 +132,25 @@ async function getJson(url, tries = 3) {
 async function fetchHistory(symbol, days) {
   const need     = Math.ceil(days * 6) + WARMUP + 5;
   const cacheDir = path.join(OUT_DIR, 'cache');
-  const cacheKey = path.join(cacheDir, `${symbol}_4h_${days}d_w${WARMUP}_${new Date().toISOString().slice(0, 10)}.json`);
+  // "_h" = versi endpoint history-candles (cache lama yang terpotong ~1000 candle tidak ikut terpakai)
+  const cacheKey = path.join(cacheDir, `${symbol}_4h_${days}d_w${WARMUP}_h_${new Date().toISOString().slice(0, 10)}.json`);
   if (!argv.includes('--refresh') && fs.existsSync(cacheKey)) {
     try { return JSON.parse(fs.readFileSync(cacheKey, 'utf8')); } catch {}
   }
 
+  // history-candles: maks 200 candle per request, telusuri mundur lewat endTime
   const rows = new Map();
   let end = Date.now(), prevOldest = Infinity;
   while (rows.size < need) {
-    const j = await getJson(`${BASE}/api/v2/spot/market/candles?symbol=${symbol}&granularity=4h&endTime=${end}&limit=1000`);
+    const j = await getJson(`${BASE}/api/v2/spot/market/history-candles?symbol=${symbol}&granularity=4h&endTime=${end}&limit=200`);
     const data = j.data;
-    if (!Array.isArray(data) || !data.length) break;
+    if (!Array.isArray(data) || !data.length) break;       // data koin habis (koin baru listing)
     let oldest = Infinity;
     for (const r of data) { const ts = parseInt(r[0]); rows.set(ts, r); if (ts < oldest) oldest = ts; }
-    if (oldest >= prevOldest) break;
+    if (oldest >= prevOldest) break;                       // tidak ada kemajuan → API mengabaikan endTime
     prevOldest = oldest;
     end = oldest - 1;
-    await sleep(150);
+    await sleep(120);
   }
 
   const periodStart = Date.now() - (Date.now() % PERIOD);
@@ -133,6 +158,10 @@ async function fetchHistory(symbol, days) {
     .map(r => ({ t: parseInt(r[0]), o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }))
     .filter(x => x.t < periodStart && x.o > 0)
     .sort((a, b) => a.t - b.t);
+
+  // Peringatan bila data kurang dari yang diminta (koin baru listing, atau API membatasi)
+  const days_got = Math.max(0, (candles.length - WARMUP) / 6);
+  if (days_got < days * 0.9) console.log(`\n  ⚠ ${symbol}: data hanya ~${Math.floor(days_got)} hari (diminta ${days})`);
 
   try { fs.mkdirSync(cacheDir, { recursive: true }); fs.writeFileSync(cacheKey, JSON.stringify(candles)); } catch {}
   return candles;
@@ -194,46 +223,8 @@ function buildSeries(raw, satsCfg) {
   return { S, P };
 }
 
-function emaSeries(closes, period) {
-  const out = new Array(closes.length).fill(null);
-  if (closes.length < period) return out;
-  const k = 2 / (period + 1);
-  let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
-  out[period - 1] = ema;
-  for (let i = period; i < closes.length; i++) { ema = closes[i] * k + ema * (1 - k); out[i] = ema; }
-  return out;
-}
-
-function passFilters(P, s, i, lv) {
-  if (P.minTqi > 0 && s.res.tqi[i] < P.minTqi) return false;
-  if (P.maxRiskPct > 0 && lv.riskPct > P.maxRiskPct) return false;
-  if (P.emaPeriod > 0) {
-    s.emaCache ??= new Map();
-    if (!s.emaCache.has(P.emaPeriod)) s.emaCache.set(P.emaPeriod, emaSeries(s.c.map(x => x.c), P.emaPeriod));
-    const e = s.emaCache.get(P.emaPeriod)[i];
-    if (e == null || s.c[i].c <= e) return false;
-  }
-  return true;
-}
-
 function mulberry(seed) {
   return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-}
-
-// ───────────────────────────── REZIM BTC ─────────────────────────────
-// Peta waktu-open-candle → true bila BTC bullish pada candle yang SUDAH TUTUP itu
-// (sinyal di candle T dinilai dengan rezim BTC candle T → tidak ada look-ahead).
-function btcRegimeMap(btc, kind, emaN = 126) {
-  const m = new Map();
-  if (kind === 'sats') {
-    const P = resolveSATSParams({ preset: 'default' });          // tetap, tidak ikut preset koin
-    const res = calcSATS(btc.map(x => x.h), btc.map(x => x.l), btc.map(x => x.c), btc.map(x => x.v), P);
-    btc.forEach((x, i) => m.set(x.t, i >= P.warmup && res.trend[i] === 1));
-  } else {
-    const e = emaSeries(btc.map(x => x.c), emaN);
-    btc.forEach((x, i) => m.set(x.t, e[i] != null && x.c > e[i]));
-  }
-  return m;
 }
 
 // ───────────────────────────── SIMULASI ─────────────────────────────
@@ -294,8 +285,17 @@ function simulate(P, S, order, tStart) {
       const i = j - 1;
       if (!s.res.flipUp[i] || open.has(sym) || i < s.res.params.warmup) continue;
       const lv = satsBuyLevels(s.res, i, P.tpR);
-      if (!(lv.risk > 0) || !passFilters(P, s, i, lv)) continue;
-      if (P.btcMap && !P.btcMap.get(T - PERIOD)) { btcSkipped++; continue; }   // BTC tidak bullish → lewati BUY
+      if (!(lv.risk > 0)) continue;
+
+      // Filter entry (filters.js — identik dengan screener live)
+      s.ctx ??= makeCtx({
+        highs: s.c.map(x => x.h), lows: s.c.map(x => x.l), closes: s.c.map(x => x.c),
+        volumes: s.c.map(x => x.v), atr: s.res.rawAtr,
+      });
+      const regime = P.btcMap ? { bullish: P.btcMap.get(T - PERIOD) ?? null } : null;
+      const why = checkEntryFilters(s.ctx, i, { tqi: s.res.tqi[i], riskPct: lv.riskPct }, P.F, regime);
+      if (why) { if (why.startsWith('BTC')) btcSkipped++; continue; }
+
       if (P.randSkip > 0 && P.rng() < P.randSkip) { btcSkipped++; continue; }  // kontrol: lewati sinyal secara acak
 
       const entry = s.c[j].o * (1 + slip);
@@ -366,8 +366,8 @@ function printReport(label, P, SP, m, extra = {}) {
   console.log(`  ${label}`);
   console.log('═'.repeat(68));
   console.log(`  SATS   : preset ${SP.preset} | ATR ${SP.atrLen} | mult ${SP.baseMult} | SL ${SP.slMult}xATR | ER ${SP.erLen} | char-flip ${SP.charFlip ? 'on' : 'off'}`);
-  console.log(`  Filter : TQI ${P.minTqi > 0 ? '>= ' + P.minTqi : 'off'} | EMA ${P.emaPeriod > 0 ? 'close > EMA' + P.emaPeriod + ' (4H)' : 'off'} | Risiko SL ${P.maxRiskPct > 0 ? '<= ' + P.maxRiskPct + '%' : 'off'}`);
-  console.log(`  BTC    : ${P.btcMap ? (P.btcFilter === 'sats' ? 'beli hanya saat tren SATS 4H BTC bullish' : `beli hanya saat BTC > EMA${P.btcEma} (4H)`) : 'filter rezim BTC off'}`);
+  console.log(`  Filter : ${describeFilters(P.F)}`);
+  console.log(`  BTC    : ${P.btcMap ? `beli hanya saat BTC bullish (${P.F.btcRegime.mode})` : 'filter rezim BTC off'}`);
   console.log(`  Aturan : SL ${P.slMode === 'sats' ? 'SATS (pivot - k×ATR)' : 'tanpa SL'} | Trailing ${P.trailActivate > 0 ? `@${P.trailActivate}% cb ${P.trailPct}%` : 'off'} | SELL-exit ${P.exitOnSell ? 'on' : 'off'} | MaxHold ${P.maxHoldH > 0 ? P.maxHoldH + 'h' : 'off'}`);
   console.log(`  Modal  : ${P.budget} USDT/trade x maks ${P.maxPos} posisi (basis ${P.budget * P.maxPos} USDT) | fee ${P.feePct}%/sisi | slip ${P.slipPct}%`);
   console.log('─'.repeat(68));
@@ -399,7 +399,8 @@ function writeFiles(P, res, m) {
     const rows = res.trades.sort((a, b) => a.exitT - b.exitT).map(t =>
       [t.symbol, new Date(t.entryT).toISOString(), new Date(t.exitT).toISOString(), t.entry, t.exit, t.pnl.toFixed(4), t.pnlPct.toFixed(3), t.reason, t.holdH.toFixed(1)].join(','));
     fs.writeFileSync(path.join(OUT_DIR, 'backtest-sats-trades.csv'), [head, ...rows].join('\n'));
-    fs.writeFileSync(path.join(OUT_DIR, 'backtest-sats-result.json'), JSON.stringify({ params: P, sats: BASE_SATS, metrics: m, equity: res.eq }, null, 2));
+    const { btcMap, rng, ...Pout } = P;
+    fs.writeFileSync(path.join(OUT_DIR, 'backtest-sats-result.json'), JSON.stringify({ params: Pout, sats: BASE_SATS, metrics: m, equity: res.eq }, null, 2));
     console.log(`\n  📁 Detail: ${OUT_DIR}/backtest-sats-trades.csv , backtest-sats-result.json`);
   } catch (e) { console.log(`  (gagal tulis file: ${e.message})`); }
 }
@@ -435,15 +436,19 @@ async function main() {
 
   // ── data BTC untuk filter rezim ──
   let btcData = null;
-  if (BASE_PARAMS.btcFilter !== 'off' || argv.includes('--compare-btc')) {
+  if (BASE_PARAMS.F.btcRegime?.enabled || argv.includes('--compare-btc')) {
     btcData = argv.includes('--demo') ? raw.get('DEMO1USDT') : await fetchHistory('BTCUSDT', DAYS).catch(() => null);
     if (!btcData || btcData.length < WARMUP) { console.log('❌ Data BTCUSDT tidak tersedia untuk filter rezim.'); process.exit(1); }
   }
 
   if (argv.includes('--compare-btc')) {
     // Semua skenario: tanpa trailing, tanpa filter lain → satu-satunya beda adalah filter BTC.
-    const NOF = { minTqi: 0, emaPeriod: 0, maxRiskPct: 0, trailActivate: 0 };
-    const regs = { sats: btcRegimeMap(btcData, 'sats'), ema126: btcRegimeMap(btcData, 'ema', 126), ema50: btcRegimeMap(btcData, 'ema', 50) };
+    const NOF = { F: {}, trailActivate: 0 };
+    const regs = {
+      sats:   btcRegimeMap(btcData, { mode: 'sats' }),
+      ema126: btcRegimeMap(btcData, { mode: 'ema', period: 126 }),
+      ema50:  btcRegimeMap(btcData, { mode: 'ema', period: 50 }),
+    };
     const bullPct = m => { let n = 0, t = 0; for (const [ts, v] of m) if (ts >= tStart) { t++; if (v) n++; } return t ? n / t * 100 : 0; };
     console.log(`\n  Porsi waktu BTC "bullish" di periode uji → SATS 4H: ${bullPct(regs.sats).toFixed(0)}% | > EMA126: ${bullPct(regs.ema126).toFixed(0)}% | > EMA50: ${bullPct(regs.ema50).toFixed(0)}%`);
     const sc = [
@@ -458,7 +463,7 @@ async function main() {
     console.log('═'.repeat(112));
     const monthly = [];
     for (const x of sc) {
-      const P = { ...BASE_PARAMS, ...NOF, btcFilter: x.map ? 'on' : 'off', btcMap: x.map };
+      const P = { ...BASE_PARAMS, ...NOF, F: x.map ? { btcRegime: { enabled: true, mode: 'ema' } } : {}, btcMap: x.map };
       const m = metrics(P, simulate(P, S, order, tStart));
       console.log(`  ${pad(x.name, 44)}${pad(m.trades, 7)}${pad(m.winRate.toFixed(0) + '%', 7)}${pad(f2(m.totalPnl), 11)}${pad(Number.isFinite(m.profitFactor) ? m.profitFactor.toFixed(2) : '∞', 7)}${pad('-' + m.maxDD.toFixed(1), 10)}${pad(m.avgHoldH.toFixed(0), 9)}${x.map ? m.btcSkipped : '-'}`);
       monthly.push([x.name.slice(0, 1), m.byMonth]);
@@ -466,7 +471,7 @@ async function main() {
     // ── Kontrol: buang sinyal secara ACAK dalam jumlah yang sama dengan filter M ──
     // Menjawab: apakah filter BTC punya informasi, atau hanya mengurangi jumlah trade?
     {
-      const PM = { ...BASE_PARAMS, ...NOF, btcFilter: 'on', btcMap: regs.sats };
+      const PM = { ...BASE_PARAMS, ...NOF, F: { btcRegime: { enabled: true, mode: 'sats' } }, btcMap: regs.sats };
       const mM = metrics(PM, simulate(PM, S, order, tStart));
       const frac = mM.btcSkipped / Math.max(1, mM.btcSkipped + mM.trades);
       const R = [];
@@ -487,19 +492,24 @@ async function main() {
     console.log('  Cara baca: filter BTC baru berguna bila PnL & MaxDD-nya LEBIH BAIK dari rentang kontrol acak (baris R), bukan sekadar lebih sedikit trade.');
   } else if (argv.includes('--compare')) {
     // Semua skenario mulai dari TANPA filter (baseline), lalu ditambah satu variabel per baris.
-    const NOF = { minTqi: 0, emaPeriod: 0, maxRiskPct: 0 };
+    const NOF = { F: {} };
     const scenarios = [
       { name: 'A. Default (ATR14 x2.0, SL 1.5xATR)',        s: { preset: 'default' }, o: { ...NOF } },
       { name: 'B. Crypto 24/7 (ATR14 x2.8, SL 2.5xATR)',    s: { preset: 'crypto'  }, o: { ...NOF } },
       { name: 'C. Swing (ATR21 x2.5, SL 2.0xATR, ER30)',    s: { preset: 'swing'   }, o: { ...NOF } },
-      { name: 'D. Default + TQI >= 0.5',                    s: { preset: 'default' }, o: { ...NOF, minTqi: 0.5 } },
-      { name: 'E. Default + close > EMA50 4H',              s: { preset: 'default' }, o: { ...NOF, emaPeriod: 50 } },
-      { name: 'F. Default + risiko SL <= 8%',               s: { preset: 'default' }, o: { ...NOF, maxRiskPct: 8 } },
+      { name: 'D. Default + TQI >= 0.5',                    s: { preset: 'default' }, o: { F: { minTqi: 0.5 } } },
+      { name: 'E. Default + close > EMA50 4H',              s: { preset: 'default' }, o: { F: { ema: { enabled: true, period: 50 } } } },
+      { name: 'F. Default + risiko SL <= 8%',               s: { preset: 'default' }, o: { F: { maxRisk: { enabled: true, maxPct: 8 } } } },
       { name: 'G. Default + char-flip aktif',               s: { preset: 'default', advanced: { charFlip: true } }, o: { ...NOF } },
       { name: 'H. Default tanpa trailing',                  s: { preset: 'default' }, o: { ...NOF, trailActivate: 0 } },
       { name: 'I. Default murni SATS (tanpa SL/trail/hold)', s: { preset: 'default' }, o: { ...NOF, slMode: 'none', trailActivate: 0, maxHoldH: 0 } },
-      { name: 'J. Crypto + TQI >= 0.5',                     s: { preset: 'crypto'  }, o: { ...NOF, minTqi: 0.5 } },
-      { name: 'K. Crypto + close > EMA50 4H',               s: { preset: 'crypto'  }, o: { ...NOF, emaPeriod: 50 } },
+      { name: 'J. Crypto + TQI >= 0.5',                     s: { preset: 'crypto'  }, o: { F: { minTqi: 0.5 } } },
+      { name: 'K. Crypto + close > EMA50 4H',               s: { preset: 'crypto'  }, o: { F: { ema: { enabled: true, period: 50 } } } },
+      // ── filter baru (tahap 1) ──
+      { name: 'L. Default + volume >= 1.3x',                s: { preset: 'default' }, o: { F: { volume: { enabled: true, minRatio: 1.3 } } } },
+      { name: 'M. Default + RSI <= 75',                     s: { preset: 'default' }, o: { F: { rsi: { enabled: true, max: 75 } } } },
+      { name: 'N. Default + extension <= 3.5 ATR',          s: { preset: 'default' }, o: { F: { extension: { enabled: true, maxAtr: 3.5 } } } },
+      { name: 'O. Default + ADX >= 20',                     s: { preset: 'default' }, o: { F: { adx: { enabled: true, min: 20 } } } },
     ];
     const cache = new Map();
     console.log('\n' + '═'.repeat(108));
@@ -518,7 +528,7 @@ async function main() {
   } else {
     const { S, P: SP } = buildSeries(raw, BASE_SATS);
     const P = { ...BASE_PARAMS };
-    if (P.btcFilter !== 'off') P.btcMap = btcRegimeMap(btcData, P.btcFilter, P.btcEma);
+    if (P.F.btcRegime?.enabled) P.btcMap = btcRegimeMap(btcData, P.F.btcRegime);
     const res = simulate(P, S, order, tStart);
     const m = metrics(P, res);
     printReport('HASIL BACKTEST SATS', P, SP, m, { buyHold });

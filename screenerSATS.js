@@ -1,9 +1,9 @@
 /**
  * Screener — Self-Aware Trend System (SATS) 4H
  *
- * Pengganti screenerUTBot.js. Mendeteksi flip tren SATS di candle 4H yang sudah closed.
+ * Mendeteksi flip tren SATS di candle 4H yang sudah closed.
  *
- * BUY  : tren flip ke bullish  (+ lolos filter opsional: min TQI / EMA / max risiko)
+ * BUY  : tren flip ke bullish  (+ lolos filter di filters.js, semua bisa di-enable/disable via config)
  * SELL : tren flip ke bearish  (dipakai untuk exit posisi yang sudah open, tidak difilter)
  *
  * Parameter dari user-config.json → screening.sats (preset default / crypto / swing / custom).
@@ -12,8 +12,8 @@
  */
 
 import { getCandles }  from './bitget.js';
-import { calcEMA }     from './indicators.js';
 import { calcSATS, resolveSATSParams, satsBuyLevels, satsMinCandles } from './sats.js';
+import { makeCtx, checkEntryFilters, liveBtcRegime, describeFilters } from './filters.js';
 import { config }      from './config.js';
 import { log }         from './logger.js';
 import { hasPosition, getOpenSymbols } from './state.js';
@@ -27,23 +27,6 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 const _sentSignals = new Map();
 const signalKey = (symbol, signal, ts) => `${symbol}_${signal}_${TF}_${ts}`;
-
-// Return string alasan penolakan, atau null bila lolos (khusus BUY)
-function checkBuyFilters(res, i, lv, f = {}) {
-  if (f.minTqi > 0 && res.tqi[i] < f.minTqi)
-    return `TQI ${res.tqi[i].toFixed(2)} < ${f.minTqi}`;
-
-  if (f.maxRisk?.enabled && lv.riskPct > (f.maxRisk.maxPct ?? 10))
-    return `risiko ${lv.riskPct.toFixed(1)}% > ${f.maxRisk.maxPct ?? 10}%`;
-
-  if (f.ema?.enabled) {
-    const p = f.ema.period ?? 50;
-    const e = calcEMA(res.closes.slice(0, i + 1), p);
-    if (e === null)           return `data kurang untuk EMA${p}`;
-    if (res.closes[i] <= e)   return `close ${res.closes[i]} <= EMA${p} ${e.toFixed(6)}`;
-  }
-  return null;
-}
 
 async function scanSymbol4H(symbol, S, _retry = 0) {
   const MAX_RETRY = 2;
@@ -78,7 +61,8 @@ async function scanSymbol4H(symbol, S, _retry = 0) {
     if (signal === 'BUY') {
       lv = satsBuyLevels(res, last, tpR);
       if (!(lv.risk > 0)) return null;
-      const reject = checkBuyFilters(res, last, lv, filters);
+      const ctx    = makeCtx({ highs, lows, closes, volumes, atr: res.rawAtr });
+      const reject = checkEntryFilters(ctx, last, { tqi: res.tqi[last], riskPct: lv.riskPct }, filters, S.regime);
       if (reject) {
         log('sats', `  ⛔ ${symbol} BUY ditolak filter: ${reject}`);
         return null;
@@ -101,7 +85,7 @@ async function scanSymbol4H(symbol, S, _retry = 0) {
       symbol,
       signal,
       close:        closes[last],
-      trailingStop: band,                    // garis SATS (kompatibel dengan notifikasi lama)
+      trailingStop: band,
       prevStop:     res.stLine[last - 1],
       atr:          res.atr[last],
       candleTs:     lastTs,
@@ -131,7 +115,7 @@ async function scanSymbol4H(symbol, S, _retry = 0) {
         label:       `SATS BUY zone ${lv.sl.toFixed(6)} - ${(closes[last] * 1.005).toFixed(6)}`,
       }] : [],
       matchCount: 1,
-      score: Math.round(tqi * 100),          // dipakai untuk urutan prioritas BUY
+      score: Math.round(tqi * 100),
     };
 
   } catch (err) {
@@ -164,13 +148,16 @@ export async function runSATSScreener(tickers, opts = {}) {
     P, filters,
     candleLimit: Math.max(sCfg.candleLimit ?? 300, satsMinCandles(P) + 20),
     tpR:         sCfg.tpR ?? [1, 2, 3],
+    regime:      null,
   };
 
-  const fDesc = [
-    filters.minTqi > 0        ? `TQI>=${filters.minTqi}` : null,
-    filters.ema?.enabled      ? `close>EMA${filters.ema.period ?? 50}` : null,
-    filters.maxRisk?.enabled  ? `risiko<=${filters.maxRisk.maxPct ?? 10}%` : null,
-  ].filter(Boolean).join(' + ') || 'tanpa filter';
+  const fDesc = describeFilters(filters);
+
+  // Rezim BTC dihitung sekali per scan (cache per candle 4H)
+  if (filters.btcRegime?.enabled && mode !== 'sell_only') {
+    S.regime = await liveBtcRegime(getCandles, filters.btcRegime);
+    log('sats', `  BTC rezim: ${S.regime?.bullish == null ? 'TIDAK TERSEDIA → BUY diblokir' : S.regime.bullish ? 'bullish' : 'TIDAK bullish → BUY diblokir'}`);
+  }
 
   log('sats', `══ SATS Screener (4H | preset=${P.preset} ATR${P.atrLen} x${P.baseMult} SL${P.slMult}xATR | mode=${mode} | filter BUY: ${fDesc}) ══`);
 

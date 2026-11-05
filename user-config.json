@@ -26,11 +26,7 @@
       "minVolume24h": 3000000,
       "maxSignalsPerRun": 5,
       "candleLimit": 300,
-      "tpR": [
-        1,
-        2,
-        3
-      ],
+      "tpR": [1, 2, 3],
       "custom": {
         "atrLen": 14,
         "baseMult": 2,
@@ -40,14 +36,13 @@
       "advanced": {},
       "filters": {
         "minTqi": 0.5,
-        "ema": {
-          "enabled": true,
-          "period": 126
-        },
-        "maxRisk": {
-          "enabled": true,
-          "maxPct": 10
-        }
+        "ema":       { "enabled": true,  "period": 126 },
+        "maxRisk":   { "enabled": true,  "maxPct": 10 },
+        "volume":    { "enabled": false, "minRatio": 1.3, "period": 20 },
+        "rsi":       { "enabled": false, "max": 75, "period": 14 },
+        "extension": { "enabled": false, "emaPeriod": 21, "maxAtr": 3.5 },
+        "adx":       { "enabled": false, "min": 20, "period": 14 },
+        "btcRegime": { "enabled": false, "mode": "ema", "period": 126 }
       }
     }
   },
@@ -81,48 +76,10 @@
     "managementIntervalMin": 1
   },
   "blacklist": [
-    "USDCUSDT",
-    "BUSDUSDT",
-    "TUSDUSDT",
-    "USDTUSDT",
-    "DAIUSDT",
-    "FRAXUSDT",
-    "USDPUSDT",
-    "GUSDUSDT",
-    "LUSDUSDT",
-    "MUSDUSDT",
-    "CUSDUSDT",
-    "EUSDUSDT",
-    "USDGOUSDT",
-    "USDDUSDT",
-    "USDEUSDT",
-    "USDXUSDT",
-    "SUSDUSDT",
-    "USDSUSDT",
-    "AUSDUSDT",
-    "RUSDUSDT",
-    "DUSDUSDT",
-    "USDKUSDT",
-    "PYUSDUSDT",
-    "FDUSDUSDT",
-    "AEUSDUSDT",
-    "USDBUSDT",
-    "USDNUSDT",
-    "EURCUSDT",
-    "EURSUSDT",
-    "EURTUSDT",
-    "GBPTUSDT",
-    "FRXETHUSDT",
-    "CBETHUSDT",
-    "STETHUSDT",
-    "WSTETHUSDT",
-    "RETHUSDT",
-    "SWETHUSDT",
-    "BETHUSDT",
-    "ANKRETHUSDT",
-    "WBTCUSDT",
-    "BTCBUSDT",
-    "HBTCUSDT",
-    "RENBTCUSDT"
+    "USDCUSDT","BUSDUSDT","TUSDUSDT","USDTUSDT","DAIUSDT","FRAXUSDT","USDPUSDT","GUSDUSDT","LUSDUSDT","MUSDUSDT",
+    "CUSDUSDT","EUSDUSDT","USDGOUSDT","USDDUSDT","USDEUSDT","USDXUSDT","SUSDUSDT","USDSUSDT","AUSDUSDT","RUSDUSDT",
+    "DUSDUSDT","USDKUSDT","PYUSDUSDT","FDUSDUSDT","AEUSDUSDT","USDBUSDT","USDNUSDT","EURCUSDT","EURSUSDT","EURTUSDT",
+    "GBPTUSDT","FRXETHUSDT","CBETHUSDT","STETHUSDT","WSTETHUSDT","RETHUSDT","SWETHUSDT","BETHUSDT","ANKRETHUSDT",
+    "WBTCUSDT","BTCBUSDT","HBTCUSDT","RENBTCUSDT"
   ]
 }
