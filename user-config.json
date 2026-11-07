@@ -63,7 +63,7 @@
       "activateAfterTP1": true,
       "activateAtProfitPct": 10,
       "breakevenBufferPct": 0,
-      "trailPct": 7
+      "trailPct": 5
     },
     "maxHoldHours": 0,
     "takeProfitPct": 10,
