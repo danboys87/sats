@@ -39,7 +39,7 @@
         "ema":       { "enabled": true,  "period": 50 },
         "maxRisk":   { "enabled": false,  "maxPct": 10 },
         "volume":    { "enabled": false, "minRatio": 1.3, "period": 20 },
-        "rsi":       { "enabled": false, "max": 75, "period": 14 },
+        "rsi":       { "enabled": false, "max": 70, "period": 14 },
         "extension": { "enabled": false, "emaPeriod": 21, "maxAtr": 3.5 },
         "adx":       { "enabled": false, "min": 20, "period": 14 },
         "btcRegime": { "enabled": false, "mode": "ema", "period": 126 }
